@@ -2,7 +2,7 @@
 # Filename: Varset.cpp
 # Author: Jiaqi, Chen
 # Mail: chenjiaqi93@163.com
-# Last Modified: 2017-03-10
+# Last Modified: 2016-03-02 20:35
 # Description: implement functions in Varset.h
 =============================================================================*/
 
@@ -10,138 +10,100 @@
 
 using namespace std;
 
-Varset::Varset(const string &_var)
+Varset::Varset(string & _var)
 {
-	this->addVar(_var);
+	addVar(_var);
 }
 
-Varset::Varset(const vector<string> &_vars)
+Varset::Varset(vector<string> & _varset)
 {
-	for (int i = 0; i < (int)_vars.size(); i++)
-		this->addVar(_vars[i]);
+	for (int i = 0; i < (int)_varset.size(); i++)
+		addVar(_varset[i]);
 }
 
-bool Varset::empty() const
+bool Varset::findVar(string& _var)
 {
-	return this->vars.empty();
+	if ((int)this->varset.size() == 0)	return false;
+	vector<string>::iterator i = find(this->varset.begin(), this->varset.end(), _var);
+	return (i != this->varset.end());
 }
 
-int Varset::getVarsetSize() const
-{
-	return this->vars.size();
-}
-
-bool Varset::findVar(const string &_var) const
-{
-	if (this->vars.empty())
-		return false;
-
-	for (int i = 0; i < (int)this->vars.size(); i++)
-		if (this->vars[i] == _var)	return true;
-
-	return false;
-}
-
-void Varset::addVar(const string &_var)
+void Varset::addVar(string& _var)
 {
 	if (!this->findVar(_var))
-		this->vars.push_back(_var);
+		this->varset.push_back(_var);
 }
 
-Varset Varset::operator + (const Varset &_varset) const
+Varset Varset::operator + (Varset& x)
 {
-	Varset r(*this);
-
-	for (int i = 0; i < (int)_varset.vars.size(); i++)
-		r.addVar(_varset.vars[i]);
-
+	Varset r;
+	for (int i = 0; i < (int)this->varset.size(); i++)
+		r.addVar(this->varset[i]);
+	for (int i = 0; i < (int)x.varset.size(); i++)
+		r.addVar(x.varset[i]);
 	return r;
 };
 
-Varset& Varset::operator += (const Varset &_varset)
-{
-	for (int i = 0; i < (int)_varset.vars.size(); i++)
-		this->addVar(_varset.vars[i]);
-
-	return *this;
-}
-
-Varset Varset::operator * (const Varset &_varset) const
+Varset Varset::operator * (Varset& x)
 {
 	Varset r;
-
-	for (int i = 0; i < (int)this->vars.size(); i++)
-		if (_varset.findVar(this->vars[i]))
-			r.addVar(this->vars[i]);
-
+	for (int i = 0; i < (int)this->varset.size(); i++)
+		if (x.findVar(this->varset[i]))
+			r.addVar(this->varset[i]);
 	return r;
 }
 
-Varset Varset::operator - (const Varset &_varset) const
+Varset Varset::operator - (Varset& x)
 {
 	Varset r;
-
-	for (int i = 0; i < (int)this->vars.size(); i++)
-		if (!_varset.findVar(this->vars[i]))
-			r.addVar(this->vars[i]);
-
+	for (int i = 0; i < (int)this->varset.size(); i++)
+		if (!x.findVar(this->varset[i]))
+			r.addVar(this->varset[i]);
 	return r;
 }
 
-bool Varset::operator == (const Varset &_varset) const
+bool Varset::operator ==(Varset &x)
 {
-	if ((int)this->vars.size() != (int)_varset.vars.size())
-		return false;
-
-	for (int i = 0; i < (int)this->vars.size(); i++)
-		if (!_varset.findVar(this->vars[i]))
-			return false;
-
+	if ((int)this->varset.size() != (int)x.varset.size())	return false;
+	for (int i = 0; i < (int)this->varset.size(); i++)
+		if (!x.findVar(this->varset[i]))	return false;
 	return true;
 }
 
-bool Varset::hasCommonVar(const Varset &_varset) const
+bool Varset::hasCommonVar(Varset &x)
 {
-	for (int i = 0; i < (int)this->vars.size(); i++)
-		if (_varset.findVar(this->vars[i]))
-			return true;
-
+	for (int i = 0; i < (int)this->varset.size(); i++)
+		if (x.findVar(this->varset[i]))	return true;
 	return false;
 }
 
-bool Varset::belongTo(const Varset &_varset) const
+bool Varset::belongTo(Varset &x)
 {
-	for (int i = 0; i < (int)this->vars.size(); i++)
-		if (!_varset.findVar(this->vars[i]))
-			return false;
-
+	for (int i = 0; i < (int)this->varset.size(); i++)
+		if (!x.findVar(this->varset[i]))	return false;
 	return true;
 }
 
-vector<int> Varset::mapTo(const Varset &_varset) const
+vector <int> Varset::mapTo(Varset& x)
 {
 	vector<int> r;
-
-	for (int i = 0; i < (int)this->vars.size(); i++)
+	for (int i = 0; i < (int)this->varset.size(); i++)
 	{
 		r.push_back(-1);
-		for (int j = 0; j < (int)_varset.vars.size(); j++)
-			if (this->vars[i] == _varset.vars[j])
+		for (int j = 0; j < (int)x.varset.size(); j++)
+			if (this->varset[i] == x.varset[j])
 				r[i] = j;
 	}
-
 	return r;
 }
 
-void Varset::print() const
+void Varset::print()
 {
 	printf("Varset: ");
-
-	for (int i = 0; i < (int)this->vars.size(); i++)
+	for (int i = 0; i < (int)this->varset.size(); i++)
 	{
-		printf("%s ", this->vars[i].c_str());
+		printf("%s ", this->varset[i].c_str());
 	}
-
 	printf("\n");
 }
 

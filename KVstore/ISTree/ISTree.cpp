@@ -129,20 +129,7 @@ ISTree::search(unsigned _key, char*& _str, unsigned& _len)
 	_str = val->getStr();
 	_len = val->getLen();
 
-	char* debug = new char[_len];
-	memcpy(debug, _str, _len);
-//	debug[_len] = '\0';
-	_str = debug;
-
-	//if(_key==62)
-	//{
-		//cout<<"check in search: "<<string(_str, _len)<<endl;
-	//}
 	this->TSM->request(request);
-	//if(_key==62)
-	//{
-		//cout<<"check in search: "<<string(_str, _len)<<endl;
-	//}
 	return true;
 }
 
@@ -603,20 +590,13 @@ ISTree::release(ISNode* _np) const
 
 ISTree::~ISTree()
 {
-	//cout << "istree : " << endl;
-	//cout << "delete stream" << endl;
 	delete this->stream;   //maybe NULL
-	stream = NULL;
-	//cout << "delete TSM" << endl;
 	delete TSM;
-	TSM = NULL;
 #ifdef DEBUG_KVSTORE
-	//printf("already empty the buffer, now to delete all nodes in tree!\n");
+	printf("already empty the buffer, now to delete all nodes in tree!\n");
 #endif
 	//recursively delete each Node
-	//cout << "release" << endl;
 	release(root);
-	//cout << "~istree done" << endl;
 }
 
 void

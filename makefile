@@ -35,7 +35,7 @@
 
 #compile parameters
 
-CC = ccache g++ 
+CC = g++ -std=c++11
 #CC = g++
 
 #the optimazition level of gcc/g++
@@ -43,11 +43,11 @@ CC = ccache g++
 #NOTICE: -O2 is recommended, while -O3 is dangerous
 #when developing, not use -O because it will disturb the normal 
 #routine. use it for test and release.
-CFLAGS = -c -Wall -O2 -pthread -std=c++11
-EXEFLAG = -O2 -pthread -std=c++11
+CFLAGS = -c -Wall -O2
+EXEFLAG = -O2
 #-coverage
-#CFLAGS = -c -Wall -pthread -g -std=c++11
-#EXEFLAG = -pthread -g -std=c++11
+#CFLAGS = -c -Wall -O2 -pthread
+#EXEFLAG = -O2 -pthread
 
 #add -lreadline -ltermcap if using readline or objs contain readline
 library = -ltermcap -lreadline -L./lib -L/usr/local/lib -lantlr -lgcov -lboost_filesystem -lboost_system -lboost_regex -lpthread -I/usr/local/include/boost
@@ -62,9 +62,9 @@ exedir = bin/
 
 lib_antlr = lib/libantlr.a
 
-api_cpp = api/socket/cpp/lib/libgstoreconnector.a
+api_cpp = api/cpp/lib/libgstoreconnector.a
 
-api_java = api/socket/java/lib/GstoreJavaAPI.jar
+api_java = api/java/lib/GstoreJavaAPI.jar
 
 # objects
 
@@ -138,7 +138,7 @@ $(exedir)gclient: $(lib_antlr) $(objdir)gclient.o $(objfile)
 	$(CC) $(EXEFLAG) -o $(exedir)gclient $(objdir)gclient.o $(objfile) $(library)
 
 $(exedir)gconsole: $(lib_antlr) $(objdir)gconsole.o $(objfile) $(api_cpp)
-	$(CC) $(EXEFLAG) -o $(exedir)gconsole $(objdir)gconsole.o $(objfile) $(library) -L./api/socket/cpp/lib -lgstoreconnector
+	$(CC) $(EXEFLAG) -o $(exedir)gconsole $(objdir)gconsole.o $(objfile) $(library) -L./api/cpp/lib -lgstoreconnector
 
 $(exedir)ghttp: $(lib_antlr) $(objdir)ghttp.o ./Server/server_http.hpp ./Server/client_http.hpp $(objfile)
 	$(CC) $(EXEFLAG) -o $(exedir)ghttp $(objdir)ghttp.o $(objfile) $(library) $(inc) -DUSE_BOOST_REGEX
@@ -165,8 +165,8 @@ $(objdir)gserver_backup_scheduler.o: Main/gserver_backup_scheduler.cpp Server/Se
 $(objdir)gclient.o: Main/gclient.cpp Server/Client.h Util/Util.h $(lib_antlr)
 	$(CC) $(CFLAGS) Main/gclient.cpp $(inc) -o $(objdir)gclient.o #-DREADLINE_ON
 
-$(objdir)gconsole.o: Main/gconsole.cpp Database/Database.h Util/Util.h api/socket/cpp/src/GstoreConnector.h $(lib_antlr)
-	$(CC) $(CFLAGS) Main/gconsole.cpp $(inc) -o $(objdir)gconsole.o -I./api/socket/cpp/src/ #-DREADLINE_ON
+$(objdir)gconsole.o: Main/gconsole.cpp Database/Database.h Util/Util.h api/cpp/src/GstoreConnector.h $(lib_antlr)
+	$(CC) $(CFLAGS) Main/gconsole.cpp $(inc) -o $(objdir)gconsole.o -I./api/cpp/src/ #-DREADLINE_ON
 
 $(objdir)ghttp.o: Main/ghttp.cpp Server/server_http.hpp Server/client_http.hpp Database/Database.h Util/Util.h $(lib_antlr)
 	$(CC) $(CFLAGS) Main/ghttp.cpp $(inc) -o $(objdir)ghttp.o -DUSE_BOOST_REGEX
@@ -429,19 +429,19 @@ $(lib_antlr):
 	cd tools; tar -xzvf sparql.tar.gz; mv Sparql* ../Parser/;
 
 $(api_cpp): $(objdir)Socket.o
-	$(MAKE) -C api/socket/cpp/src 
+	$(MAKE) -C api/cpp/src 
 
 $(api_java):
-	$(MAKE) -C api/socket/java/src
+	$(MAKE) -C api/java/src
 
 .PHONY: clean dist tarball api_example gtest sumlines
 
 clean:
 	rm -rf lib/libantlr.a
-	$(MAKE) -C api/socket/cpp/src clean
-	$(MAKE) -C api/socket/cpp/example clean
-	$(MAKE) -C api/socket/java/src clean
-	$(MAKE) -C api/socket/java/example clean
+	$(MAKE) -C api/cpp/src clean
+	$(MAKE) -C api/cpp/example clean
+	$(MAKE) -C api/java/src clean
+	$(MAKE) -C api/java/example clean
 	#$(MAKE) -C KVstore clean
 	rm -rf $(exedir)g* $(objdir)*.o $(exedir).gserver*
 	#rm -rf .project .cproject .settings   just for eclipse
@@ -460,8 +460,8 @@ tarball:
 		Main Database KVstore Util Query Signature VSTree Parser Server README.md init.conf NOTES.md StringIndex COVERAGE
 
 APIexample: $(api_cpp) $(api_java)
-	$(MAKE) -C api/socket/cpp/example
-	$(MAKE) -C api/socket/java/example
+	$(MAKE) -C api/cpp/example
+	$(MAKE) -C api/java/example
 
 gtest: $(objdir)gtest.o $(objfile)
 	$(CC) $(EXEFLAG) -o $(exedir)gtest $(objdir)gtest.o $(objfile) lib/libantlr.a $(library)
@@ -475,11 +475,11 @@ $(exedir)gadd: $(objdir)gadd.o $(objfile)
 $(objdir)gadd.o: Main/gadd.cpp
 	$(CC) $(CFLAGS) Main/gadd.cpp $(inc) -o $(objdir)gadd.o
 
-#$(objdir)HttpConnector: $(objdir)HttpConnector.o $(objfile)
-	#$(CC) $(CFLAGS) -o $(exedir)HttpConnector $(objdir)HttpConnector.o $(objfile) lib/libantlr.a $(library) $(inc) -DUSE_BOOST_REGEX
+#$(objdir)ghttp: $(objdir)ghttp.o $(objfile)
+	#$(CC) $(CFLAGS) -o $(exedir)ghttp $(objdir)ghttp.o $(objfile) lib/libantlr.a $(library) $(inc) -DUSE_BOOST_REGEX
 
-#$(objdir)HttpConnector.o: Main/HttpConnector.cpp
-	#$(CC) $(CFLAGS) Main/HttpConnector.cpp $(inc) -o $(objdir)HttpConnector.o $(library) -DUSE_BOOST_REGEX
+#$(objdir)ghttp.o: Main/ghttp.cpp
+	#$(CC) $(CFLAGS) Main/ghttp.cpp $(inc) -o $(objdir)ghttp.o $(library) -DUSE_BOOST_REGEX
 
 $(exedir)gsub: $(objdir)gsub.o $(objfile)
 	$(CC) $(EXEFLAG) -o $(exedir)gsub $(objdir)gsub.o $(objfile) lib/libantlr.a $(library)

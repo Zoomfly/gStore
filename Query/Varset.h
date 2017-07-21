@@ -2,7 +2,7 @@
 # Filename: Varset.h
 # Author: Jiaqi, Chen
 # Mail: chenjiaqi93@163.com
-# Last Modified: 2017-03-10
+# Last Modified: 2016-03-02 20:35
 # Description:
 =============================================================================*/
 
@@ -14,30 +14,26 @@
 class Varset
 {
 	public:
-		std::vector<std::string> vars;
-
+		std::vector <std::string> varset;
 		Varset(){};
-		Varset(const std::string &_var);
-		Varset(const std::vector<std::string> &_vars);
+		Varset(std::string & _var);
+		Varset(std::vector<std::string> & _varset);
 
-		bool empty() const;
-		int getVarsetSize() const;
-		bool findVar(const std::string &_var) const;
-		void addVar(const std::string &_var);
+		bool findVar(std::string& _var);
+		void addVar(std::string& _var);
 
-		Varset operator + (const Varset &_varset) const;
-		Varset& operator += (const Varset &_varset);
-		Varset operator * (const Varset &_varset) const;
-		Varset operator - (const Varset &_varset) const;
+		Varset operator + (Varset& x);
+		Varset operator * (Varset& x);
+		Varset operator - (Varset& x);
+		bool operator ==(Varset &x);
+		bool hasCommonVar(Varset &x);
+		bool belongTo(Varset &x);
 
-		bool operator ==(const Varset &_varset) const;
-		bool hasCommonVar(const Varset &_varset) const;
-		bool belongTo(const Varset &_varset) const;
+		std::vector <int> mapTo(Varset& x);
 
-		std::vector<int> mapTo(const Varset &_varset) const;
-
-		void print() const;
+		void print();
 };
 
 #endif // _QUERY_VARSET_H
+
 

@@ -56,63 +56,21 @@ in the sparql query can point to the same node in data graph)
 #include <set>
 #include <stack>
 #include <queue>
-#include <deque>
 #include <vector>
 #include <list>
 #include <iterator>
 #include <algorithm>
 #include <functional>
 #include <utility>
-#include <new>
 
 //NOTICE:below are libraries need to link
-#include <thread>    //only for c++11 or greater versions
-#include <atomic> 
-#include <mutex> 
-#include <condition_variable> 
-#include <future> 
-#include <memory> 
-#include <stdexcept> 
 #include <pthread.h> 
 #include <math.h>
 #include <readline/readline.h>
 #include <readline/history.h>
 
-//Below are for boost
-//Added for the json-example
-#define BOOST_SPIRIT_THREADSAFE
-//#include <boost/spirit.hpp>
-#include <boost/property_tree/ptree.hpp>
-#include <boost/property_tree/json_parser.hpp>
-
-//Added for the default_resource example
-#include <boost/filesystem.hpp>
-//#include <boost/regex.hpp>
-//#include <boost/thread/thread.hpp>
-//#include <boost/bind.hpp>
-#include <boost/asio.hpp>
-#include <boost/utility/string_ref.hpp>
-#include <boost/algorithm/string/predicate.hpp>
-#include <boost/functional/hash.hpp>
-#include <unordered_map>
-#include <random>
-#include <type_traits>
-
-//NOTICE: hpp is different from static library(*.a) or dynamic library(*.so)
-//It places the implementations totally in header file, hpp = *.h + *.cpp
-
-//NOTICE: use below to forbid the warnings in third-part library
-//#pragma warning(push)
-//#pragma warning(disable:4009)
-//#include <***>
-//#pragma warning(pop) 
-
-//===================================================================================================================
-
-//if used as only-read application(like sparql endpoint)
-//#define ONLY_READ 1
 //if use pthread and lock
-#define THREAD_ON 1			
+//#define THREAD_ON 1			
 //if use stream module if result is too large than memory can hold
 #define STREAM_ON 1			
 //when used as C/S, if output query result in the server port: default not(you can see the result in the client)
@@ -180,8 +138,6 @@ in the sparql query can point to the same node in data graph)
 
 #define xfree(x) free(x); x = NULL;
 
-//===================================================================================================================
-
 //NOTICE:include Util.h and below in each main function
 //(the beginning position)
 //#ifdef DEBUG
@@ -198,10 +154,6 @@ typedef unsigned(*HashFunction)(const char*);
 //type for the triple num
 //NOTICE: this should use unsigned (triple num may > 2500000000)
 typedef unsigned TYPE_TRIPLE_NUM;
-//NOTICE: we do not use long long because it will consume more spaces in pre2num of Database
-//For single machines, we aim to support 4.2B triples, and that's enough
-//typedef long long TYPE_TRIPLE_NUM;
-//TODO: use long if need to run 5B dataset
 
 //type for entity/literal ID
 typedef unsigned TYPE_ENTITY_LITERAL_ID;
@@ -239,8 +191,6 @@ typedef struct TYPE_ID_TUPLE
 	TYPE_ENTITY_LITERAL_ID objid;
 }ID_TUPLE;
 
-//===================================================================================================================
-
 /******** all static&universal constants and fucntions ********/
 class Util
 {
@@ -254,15 +204,13 @@ public:
 	static const unsigned GB = 1073741824;
 	//static const int TRIPLE_NUM_MAX = 1000*1000*1000;
 	static const TYPE_TRIPLE_NUM TRIPLE_NUM_MAX = INVALID;
-	//static const TYPE_TRIPLE_NUM TRIPLE_NUM_MAX = (long long)10000*1000*1000;
 	static const char EDGE_IN = 'i';
 	static const char EDGE_OUT= 'o';
 
 	//In order to differentiate the sub-part and literal-part of object
 	//let subid begin with 0, while literalid begins with LITERAL_FIRST_ID 
 	//used in Database and Join
-	static const unsigned LITERAL_FIRST_ID = 2 * 1000*1000*1000;
-	//static const int LITERAL_FIRST_ID = 2 * 1000*1000*1000;
+	static const int LITERAL_FIRST_ID = 2 * 1000*1000*1000;
 
 	//initial transfer buffer size in Tree/ and Stream/
 	static const unsigned TRANSFER_SIZE = 1 << 20;	//1M
@@ -401,8 +349,6 @@ private:
 	static bool isValidIPV4(std::string);
 	static bool isValidIPV6(std::string);
 };
-
-//===================================================================================================================
 
 class BlockInfo
 {

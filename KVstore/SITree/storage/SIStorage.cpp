@@ -649,7 +649,6 @@ SIStorage::~SIStorage()
 	printf("already empty the freelist!\n");
 #endif
 	delete this->minheap;
-	minheap = NULL;
 #ifdef DEBUG_KVSTORE
 	printf("already empty the buffer heap!\n");
 #endif

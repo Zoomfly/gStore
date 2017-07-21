@@ -130,7 +130,7 @@ IVLeafNode::getValue(VList* _vlist, int _index, char*& _str, unsigned& _len) con
 		cout<<"this is a vlist in get()"<<endl;
 #endif
 		unsigned block_num = this->values[_index].getLen();
-		_vlist->readValue(block_num, _str, _len, this->keys[_index]);
+		_vlist->readValue(block_num, _str, _len);
 	}
 	else
 	{
@@ -342,7 +342,7 @@ IVLeafNode::split(IVNode* _father, int _index)
 		p->addValue(this->values + i, k);
 		p->addNum();
 	}
-	unsigned tp = this->keys[MIN_KEY_NUM];
+	int tp = this->keys[MIN_KEY_NUM];
 	this->setNum(MIN_KEY_NUM);
 	_father->addKey(tp, _index);
 	_father->addChild(p, _index + 1);	//DEBUG(check the index)

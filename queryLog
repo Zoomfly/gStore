@@ -1,0 +1,246 @@
+select ?s ?o where 
+{ 
+	?s ?p ?o . 
+}
+
+3529
+-----------------------------------------------------------
+select ?s ?o where 
+{ 
+	?s ?p ?o . 
+}
+
+3529
+-----------------------------------------------------------
+select ?s ?o where 
+{ 
+	?s ?p ?o . 
+}
+
+3529
+-----------------------------------------------------------
+select ?s ?o where 
+{ 
+	?s ?p ?o . 
+}
+
+3529
+-----------------------------------------------------------
+select ?s ?o where 
+{ 
+	?s ?p ?o . 
+}
+
+3529
+-----------------------------------------------------------
+select ?s ?o where 
+{ 
+	?s ?p ?o . 
+}
+
+3529
+-----------------------------------------------------------
+select ?s ?o where 
+{ 
+	?s ?p ?o . 
+}
+
+3529
+-----------------------------------------------------------
+select ?s ?o where 
+{ 
+	?s ?p ?o . 
+}
+
+
+3529
+-----------------------------------------------------------
+SELECT DISTINCT ?v0 ?v1 ?v2 
+WHERE 
+{ 
+	?v0 <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://dbpedia.org/class/yago/LanguagesOfBotswana> . 
+	?v0 <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://dbpedia.org/class/yago/LanguagesOfNamibia> . 
+	?v0 <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://dbpedia.org/ontology/Language> . 
+} 
+
+
+0
+-----------------------------------------------------------
+select ?s ?o where 
+{ 
+	?s ?p ?o . 
+}
+
+3529
+-----------------------------------------------------------
+select ?s ?o where 
+{ 
+	?s ?p ?o . 
+}
+
+
+3529
+-----------------------------------------------------------
+select ?s ?o where 
+{ 
+	?s ?p ?o . 
+}
+
+3529
+-----------------------------------------------------------
+SELECT DISTINCT ?v0 ?v1 ?v2 
+WHERE 
+{ 
+	?v0 <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://dbpedia.org/class/yago/LanguagesOfBotswana> . 
+	?v0 <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://dbpedia.org/class/yago/LanguagesOfNamibia> . 
+	?v0 <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://dbpedia.org/ontology/Language> . 
+} 
+
+
+0
+-----------------------------------------------------------
+SELECT DISTINCT ?v0 ?v1 ?v2 
+WHERE 
+{ 
+	?v0 <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://dbpedia.org/class/yago/LanguagesOfBotswana> . 
+	?v0 <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://dbpedia.org/class/yago/LanguagesOfNamibia> . 
+	?v0 <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://dbpedia.org/ontology/Language> . 
+} 
+
+
+0
+-----------------------------------------------------------
+SELECT DISTINCT ?v0 ?v1 ?v2 
+WHERE 
+{ 
+	?v0 <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://dbpedia.org/class/yago/LanguagesOfBotswana> . 
+	?v0 <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://dbpedia.org/class/yago/LanguagesOfNamibia> . 
+	?v0 <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://dbpedia.org/ontology/Language> . 
+} 
+
+
+0
+-----------------------------------------------------------
+SELECT DISTINCT ?v0 ?v1 ?v2 
+WHERE 
+{ 
+	?v0 <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://dbpedia.org/class/yago/LanguagesOfBotswana> . 
+	?v0 <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://dbpedia.org/class/yago/LanguagesOfNamibia> . 
+	?v0 <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://dbpedia.org/ontology/Language> . 
+} 
+
+
+0
+-----------------------------------------------------------
+SELECT DISTINCT ?v0 ?v1 ?v2 
+WHERE 
+{ 
+	?v0 <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://dbpedia.org/class/yago/LanguagesOfBotswana> . 
+	?v0 <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://dbpedia.org/class/yago/LanguagesOfNamibia> . 
+	?v0 <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://dbpedia.org/ontology/Language> . 
+} 
+
+
+0
+-----------------------------------------------------------
+SELECT DISTINCT ?v0 ?v1 ?v2 
+WHERE 
+{ 
+	?v0 <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://dbpedia.org/class/yago/LanguagesOfBotswana> . 
+	?v0 <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://dbpedia.org/class/yago/LanguagesOfNamibia> . 
+	?v0 <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://dbpedia.org/ontology/Language> . 
+} 
+
+
+0
+-----------------------------------------------------------
+SELECT DISTINCT ?v0 ?v1 ?v2 
+WHERE 
+{ 
+	?v0 <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://dbpedia.org/class/yago/LanguagesOfBotswana> . 
+	?v0 <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://dbpedia.org/class/yago/LanguagesOfNamibia> . 
+	?v0 <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://dbpedia.org/ontology/Language> . 
+} 
+
+
+0
+-----------------------------------------------------------
+SELECT DISTINCT ?v0 ?v1 ?v2 
+WHERE 
+{ 
+	?v0 <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://dbpedia.org/class/yago/LanguagesOfBotswana> . 
+	?v0 <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://dbpedia.org/class/yago/LanguagesOfNamibia> . 
+	?v0 <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://dbpedia.org/ontology/Language> . 
+} 
+
+
+0
+-----------------------------------------------------------
+SELECT DISTINCT ?v0 ?v1 ?v2 
+WHERE 
+{ 
+	?v0 <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://dbpedia.org/class/yago/LanguagesOfBotswana> . 
+	?v0 <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://dbpedia.org/class/yago/LanguagesOfNamibia> . 
+	?v0 <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://dbpedia.org/ontology/Language> . 
+} 
+
+
+0
+-----------------------------------------------------------
+SELECT DISTINCT ?v0 ?v1 ?v2 
+WHERE 
+{ 
+	?v0 <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://dbpedia.org/class/yago/LanguagesOfBotswana> . 
+	?v0 <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://dbpedia.org/class/yago/LanguagesOfNamibia> . 
+	?v0 <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://dbpedia.org/ontology/Language> . 
+} 
+
+
+0
+-----------------------------------------------------------
+SELECT DISTINCT ?v0 ?v1 ?v2 
+WHERE 
+{ 
+	?v0 <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://dbpedia.org/class/yago/LanguagesOfBotswana> . 
+	?v0 <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://dbpedia.org/class/yago/LanguagesOfNamibia> . 
+	?v0 <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://dbpedia.org/ontology/Language> . 
+} 
+
+
+0
+-----------------------------------------------------------
+select ?s ?o where 
+{ 
+	?s ?p ?o . 
+}
+
+3529
+-----------------------------------------------------------
+select ?s ?o where 
+{ 
+	?s ?p ?o . 
+}
+
+3529
+-----------------------------------------------------------
+select ?s ?o where 
+{ 
+	?s ?p ?o . 
+}
+
+3529
+-----------------------------------------------------------
+select ?s ?o where 
+{ 
+	?s ?p ?o . 
+}
+
+3529
+-----------------------------------------------------------
+select ?s ?o where 
+{ 
+	?s ?p ?o . 
+}
+
+3529
+-----------------------------------------------------------
