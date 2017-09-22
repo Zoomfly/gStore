@@ -145,8 +145,6 @@ int main(int argc, char *argv[])
 	srand(time(NULL));
 
 	while (true) {
-		//NOTICE: here we use 2 processes, father process is used for monitor and control(like, restart)
-		//Child process is used to deal with web requests, can also has many threads
 		pid_t fpid = fork();
 
 		if (fpid == 0) {
@@ -271,10 +269,10 @@ int initialize(int argc, char *argv[])
 	time_t cur_time = time(NULL);
 	long time_backup = Util::read_backup_time();
 	long next_backup = cur_time - (cur_time - time_backup) % Util::gserver_backup_interval + Util::gserver_backup_interval;
-	//NOTICE: no need to backup for endpoint
 #ifndef ONLY_READ
 	scheduler = start_thread(func_scheduler);
 #endif
+
 
 
 
@@ -396,7 +394,7 @@ int initialize(int argc, char *argv[])
     // cout << r3->content.rdbuf() << endl;
 
     server_thread.join();
-	cout<<"check: server stoped"<<endl;
+			cout<<"check: server stoped"<<endl;
 
     return 0;
 }
@@ -437,8 +435,6 @@ bool stop_thread(pthread_t _thread) {
 	return pthread_kill(_thread, SIGTERM) == 0;
 }
 
-//DEBUG+TODO: the whole process exits and need to reload the database
-//(too slow: quit and restart)
 void* func_timer(void* _args) {
 	signal(SIGTERM, thread_sigterm_handler);
 	sleep(Util::gserver_query_timeout);
@@ -1025,6 +1021,10 @@ bool default_handler(const HttpServer& server, const shared_ptr<HttpServer::Resp
 				*response << "Content-Type: application/x-javascript" << "\r\n\r\n";
 			else if(extName == ".css")
 				*response << "Content-Type: text/css" << "\r\n\r\n";
+			else if(extName == ".png")
+				*response << "Content-Type: image/png" << "\r\n\r\n";
+			else if(extName == ".jpg")
+				*response << "Content-Type: image/jpeg" << "\r\n\r\n";
 			default_resource_send(server, response, ifs);
 		}
 		else

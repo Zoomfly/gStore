@@ -36,7 +36,7 @@
 #compile parameters
 
 # WARN: maybe difficult to install ccache in some systems
-CC = ccache g++
+CC = g++
 #CC = g++
 
 #the optimazition level of gcc/g++
