@@ -23,6 +23,7 @@
 #include "../Parser/DBparser.h"
 #include "../Parser/RDFParser.h"
 #include "../Parser/SparqlParser.h"
+#include "../Query/QueryCache.h"
 #include "../Query/GeneralEvaluation.h"
 
 class Database
@@ -46,6 +47,7 @@ public:
 	void release(FILE* fp0);
 	~Database();
 
+	bool save();
 	bool load();
 	bool unload();
 	void clear();
@@ -126,6 +128,8 @@ private:
 	Buffer* literal_buffer;
 	unsigned literal_buffer_size;
 
+	QueryCache *query_cache;
+
 	void setStringBuffer();
 	void warmUp();
 	//BETTER:add a predicate buffer for ?p query
@@ -163,6 +167,7 @@ private:
 	void resetIDinfo(); //reset the id info for build
 	void readIDinfo();  //read and build the free list
 	void writeIDinfo(); //write and empty the free list
+	void saveIDinfo(); //write and empty the free list
 
 	bool saveDBInfoFile();
 	bool loadDBInfoFile();

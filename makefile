@@ -35,19 +35,20 @@
 
 #compile parameters
 
-CC = g++ -std=c++11
-#CC = g++
+# WARN: maybe difficult to install ccache in some systems
+#CC = ccache g++
+CC = g++
 
 #the optimazition level of gcc/g++
 #http://blog.csdn.net/hit_090420216/article/details/44900215
 #NOTICE: -O2 is recommended, while -O3 is dangerous
 #when developing, not use -O because it will disturb the normal 
 #routine. use it for test and release.
-CFLAGS = -c -Wall -O2
-EXEFLAG = -O2
+CFLAGS = -c -Wall -O2 -pthread -std=c++11
+EXEFLAG = -O2 -pthread -std=c++11
 #-coverage
-#CFLAGS = -c -Wall -O2 -pthread
-#EXEFLAG = -O2 -pthread
+#CFLAGS = -c -Wall -pthread -g -std=c++11
+#EXEFLAG = -pthread -g -std=c++11
 
 #add -lreadline -ltermcap if using readline or objs contain readline
 library = -ltermcap -lreadline -L./lib -L/usr/local/lib -lantlr -lgcov -lboost_filesystem -lboost_system -lboost_regex -lpthread -I/usr/local/include/boost
@@ -62,9 +63,9 @@ exedir = bin/
 
 lib_antlr = lib/libantlr.a
 
-api_cpp = api/cpp/lib/libgstoreconnector.a
+api_cpp = api/socket/cpp/lib/libgstoreconnector.a
 
-api_java = api/java/lib/GstoreJavaAPI.jar
+api_java = api/socket/java/lib/GstoreJavaAPI.jar
 
 # objects
 
@@ -78,7 +79,7 @@ kvstoreobj = $(objdir)KVstore.o $(sitreeobj) $(istreeobj) $(ivtreeobj) #$(sstree
 utilobj = $(objdir)Util.o $(objdir)Bstr.o $(objdir)Stream.o $(objdir)Triple.o $(objdir)BloomFilter.o $(objdir)VList.o
 
 queryobj = $(objdir)SPARQLquery.o $(objdir)BasicQuery.o $(objdir)ResultSet.o  $(objdir)IDList.o \
-		   $(objdir)Varset.o $(objdir)QueryTree.o $(objdir)ResultFilter.o $(objdir)GeneralEvaluation.o
+		   $(objdir)Varset.o $(objdir)QueryTree.o $(objdir)TempResult.o $(objdir)QueryCache.o $(objdir)GeneralEvaluation.o
 
 signatureobj = $(objdir)SigEntry.o $(objdir)Signature.o
 
@@ -111,7 +112,7 @@ inc = -I./tools/libantlr3c-3.4/ -I./tools/libantlr3c-3.4/include
 
 TARGET = $(exedir)gbuild $(exedir)gserver $(exedir)gserver_backup_scheduler $(exedir)gclient $(exedir)gquery $(exedir)gconsole $(api_java) $(exedir)gadd $(exedir)gsub $(exedir)ghttp
 
-all: $(TARGET)
+all: $(TARGET) bin/GMonitor.class
 
 test_index: test_index.cpp
 	$(CC) $(EXEFLAG) -o test_index test_index.cpp $(objfile) $(library)
@@ -138,7 +139,7 @@ $(exedir)gclient: $(lib_antlr) $(objdir)gclient.o $(objfile)
 	$(CC) $(EXEFLAG) -o $(exedir)gclient $(objdir)gclient.o $(objfile) $(library)
 
 $(exedir)gconsole: $(lib_antlr) $(objdir)gconsole.o $(objfile) $(api_cpp)
-	$(CC) $(EXEFLAG) -o $(exedir)gconsole $(objdir)gconsole.o $(objfile) $(library) -L./api/cpp/lib -lgstoreconnector
+	$(CC) $(EXEFLAG) -o $(exedir)gconsole $(objdir)gconsole.o $(objfile) $(library) -L./api/socket/cpp/lib -lgstoreconnector
 
 $(exedir)ghttp: $(lib_antlr) $(objdir)ghttp.o ./Server/server_http.hpp ./Server/client_http.hpp $(objfile)
 	$(CC) $(EXEFLAG) -o $(exedir)ghttp $(objdir)ghttp.o $(objfile) $(library) $(inc) -DUSE_BOOST_REGEX
@@ -165,12 +166,16 @@ $(objdir)gserver_backup_scheduler.o: Main/gserver_backup_scheduler.cpp Server/Se
 $(objdir)gclient.o: Main/gclient.cpp Server/Client.h Util/Util.h $(lib_antlr)
 	$(CC) $(CFLAGS) Main/gclient.cpp $(inc) -o $(objdir)gclient.o #-DREADLINE_ON
 
-$(objdir)gconsole.o: Main/gconsole.cpp Database/Database.h Util/Util.h api/cpp/src/GstoreConnector.h $(lib_antlr)
-	$(CC) $(CFLAGS) Main/gconsole.cpp $(inc) -o $(objdir)gconsole.o -I./api/cpp/src/ #-DREADLINE_ON
+$(objdir)gconsole.o: Main/gconsole.cpp Database/Database.h Util/Util.h api/socket/cpp/src/GstoreConnector.h $(lib_antlr)
+	$(CC) $(CFLAGS) Main/gconsole.cpp $(inc) -o $(objdir)gconsole.o -I./api/socket/cpp/src/ #-DREADLINE_ON
 
 $(objdir)ghttp.o: Main/ghttp.cpp Server/server_http.hpp Server/client_http.hpp Database/Database.h Util/Util.h $(lib_antlr)
-	$(CC) $(CFLAGS) Main/ghttp.cpp $(inc) -o $(objdir)ghttp.o -DUSE_BOOST_REGEX
+	$(CC) $(CFLAGS) Main/ghttp.cpp $(inc) -o $(objdir)ghttp.o -DUSE_BOOST_REGEX $(def64IO)
 
+bin/GMonitor.class: Main/GMonitor.java
+	javac -d bin/ Main/GMonitor.java
+	cp test/gmonitor bin/
+	cp test/gshow bin/
 
 #objects in Main/ end
 
@@ -277,7 +282,7 @@ $(objdir)Join.o: Database/Join.cpp Database/Join.h $(objdir)IDList.o $(objdir)Ba
 	$(CC) $(CFLAGS) Database/Join.cpp $(inc) -o $(objdir)Join.o
 
 $(objdir)Strategy.o: Database/Strategy.cpp Database/Strategy.h $(objdir)SPARQLquery.o $(objdir)BasicQuery.o \
-	$(objdir)Triple.o $(objdir)IDList.o $(objdir)KVstore.o $(objdir)VSTree.o $(objdir)Util.o $(objdir)Join.o $(objdir)ResultFilter.o
+	$(objdir)Triple.o $(objdir)IDList.o $(objdir)KVstore.o $(objdir)VSTree.o $(objdir)Util.o $(objdir)Join.o
 	$(CC) $(CFLAGS) Database/Strategy.cpp $(inc) -o $(objdir)Strategy.o
 
 #objects in Database/ end
@@ -303,12 +308,19 @@ $(objdir)Varset.o: Query/Varset.cpp Query/Varset.h
 $(objdir)QueryTree.o: Query/QueryTree.cpp Query/QueryTree.h $(objdir)Varset.o
 	$(CC) $(CFLAGS) Query/QueryTree.cpp $(inc) -o $(objdir)QueryTree.o
 
-$(objdir)ResultFilter.o: Query/ResultFilter.cpp Query/ResultFilter.h $(objdir)BasicQuery.o $(objdir)SPARQLquery.o $(objdir)Util.o
-	$(CC) $(CFLAGS) Query/ResultFilter.cpp $(inc) -o $(objdir)ResultFilter.o
+$(objdir)TempResult.o: Query/TempResult.cpp Query/TempResult.h Query/RegexExpression.h $(objdir)Util.o \
+	$(objdir)StringIndex.o $(objdir)QueryTree.o $(objdir)Varset.o
+	$(CC) $(CFLAGS) Query/TempResult.cpp $(inc) -o $(objdir)TempResult.o
+
+$(objdir)QueryCache.o: Query/QueryCache.cpp Query/QueryCache.h $(objdir)Util.o $(objdir)QueryTree.o \
+	$(objdir)TempResult.o $(objdir)Varset.o
+	$(CC) $(CFLAGS) Query/QueryCache.cpp $(inc) -o $(objdir)QueryCache.o
 
 #no more using $(objdir)Database.o
-$(objdir)GeneralEvaluation.o: Query/GeneralEvaluation.cpp Query/GeneralEvaluation.h $(objdir)QueryParser.o $(objdir)QueryTree.o \
-	$(objdir)SPARQLquery.o $(objdir)Varset.o $(objdir)KVstore.o $(objdir)ResultFilter.o $(objdir)Strategy.o $(objdir)StringIndex.o 
+$(objdir)GeneralEvaluation.o: Query/GeneralEvaluation.cpp Query/GeneralEvaluation.h Query/RegexExpression.h \
+	$(objdir)VSTree.o $(objdir)KVstore.o $(objdir)StringIndex.o $(objdir)Strategy.o $(objdir)QueryParser.o \
+	$(objdir)Triple.o $(objdir)Util.o $(objdir)SPARQLquery.o $(objdir)QueryTree.o $(objdir)Varset.o \
+	$(objdir)TempResult.o $(objdir)QueryCache.o $(objdir)ResultSet.o
 	$(CC) $(CFLAGS) Query/GeneralEvaluation.cpp $(inc) -o $(objdir)GeneralEvaluation.o
 
 #objects in Query/ end
@@ -367,7 +379,6 @@ $(objdir)VNode.o: VSTree/VNode.cpp VSTree/VNode.h
 
 #objects in StringIndex/ begin
 $(objdir)StringIndex.o: StringIndex/StringIndex.cpp StringIndex/StringIndex.h $(objdir)KVstore.o $(objdir)Util.o
-
 	$(CC) $(CFLAGS) StringIndex/StringIndex.cpp $(inc) -o $(objdir)StringIndex.o $(def64IO)
 #objects in StringIndex/ end
 
@@ -429,21 +440,22 @@ $(lib_antlr):
 	cd tools; tar -xzvf sparql.tar.gz; mv Sparql* ../Parser/;
 
 $(api_cpp): $(objdir)Socket.o
-	$(MAKE) -C api/cpp/src 
+	$(MAKE) -C api/socket/cpp/src 
 
 $(api_java):
-	$(MAKE) -C api/java/src
+	$(MAKE) -C api/socket/java/src
 
 .PHONY: clean dist tarball api_example gtest sumlines
 
 clean:
 	rm -rf lib/libantlr.a
-	$(MAKE) -C api/cpp/src clean
-	$(MAKE) -C api/cpp/example clean
-	$(MAKE) -C api/java/src clean
-	$(MAKE) -C api/java/example clean
+	$(MAKE) -C api/socket/cpp/src clean
+	$(MAKE) -C api/socket/cpp/example clean
+	$(MAKE) -C api/socket/java/src clean
+	$(MAKE) -C api/socket/java/example clean
 	#$(MAKE) -C KVstore clean
 	rm -rf $(exedir)g* $(objdir)*.o $(exedir).gserver*
+	rm -rf bin/*.class
 	#rm -rf .project .cproject .settings   just for eclipse
 	#rm -rf cscope* just for vim
 	rm -rf logs/*.log
@@ -460,8 +472,8 @@ tarball:
 		Main Database KVstore Util Query Signature VSTree Parser Server README.md init.conf NOTES.md StringIndex COVERAGE
 
 APIexample: $(api_cpp) $(api_java)
-	$(MAKE) -C api/cpp/example
-	$(MAKE) -C api/java/example
+	$(MAKE) -C api/socket/cpp/example
+	$(MAKE) -C api/socket/java/example
 
 gtest: $(objdir)gtest.o $(objfile)
 	$(CC) $(EXEFLAG) -o $(exedir)gtest $(objdir)gtest.o $(objfile) lib/libantlr.a $(library)
@@ -475,11 +487,11 @@ $(exedir)gadd: $(objdir)gadd.o $(objfile)
 $(objdir)gadd.o: Main/gadd.cpp
 	$(CC) $(CFLAGS) Main/gadd.cpp $(inc) -o $(objdir)gadd.o
 
-#$(objdir)ghttp: $(objdir)ghttp.o $(objfile)
-	#$(CC) $(CFLAGS) -o $(exedir)ghttp $(objdir)ghttp.o $(objfile) lib/libantlr.a $(library) $(inc) -DUSE_BOOST_REGEX
+#$(objdir)HttpConnector: $(objdir)HttpConnector.o $(objfile)
+	#$(CC) $(CFLAGS) -o $(exedir)HttpConnector $(objdir)HttpConnector.o $(objfile) lib/libantlr.a $(library) $(inc) -DUSE_BOOST_REGEX
 
-#$(objdir)ghttp.o: Main/ghttp.cpp
-	#$(CC) $(CFLAGS) Main/ghttp.cpp $(inc) -o $(objdir)ghttp.o $(library) -DUSE_BOOST_REGEX
+#$(objdir)HttpConnector.o: Main/HttpConnector.cpp
+	#$(CC) $(CFLAGS) Main/HttpConnector.cpp $(inc) -o $(objdir)HttpConnector.o $(library) -DUSE_BOOST_REGEX
 
 $(exedir)gsub: $(objdir)gsub.o $(objfile)
 	$(CC) $(EXEFLAG) -o $(exedir)gsub $(objdir)gsub.o $(objfile) lib/libantlr.a $(library)

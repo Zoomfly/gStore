@@ -50,6 +50,7 @@ private:
 	TYPE_TRIPLE_NUM* pre2num;
 	TYPE_PREDICATE_ID limitID_predicate;
 	TYPE_ENTITY_LITERAL_ID limitID_literal;
+	TYPE_ENTITY_LITERAL_ID limitID_entity;
 	//used by score_node for parameters
 	static const unsigned PARAM_DEGREE = 1;
 	static const unsigned PARAM_SIZE = 1000000;
@@ -79,7 +80,7 @@ private:
 	unsigned* record;
 	unsigned record_len;
 
-	void init(BasicQuery* _basic_query);
+	void init(BasicQuery* _basic_query, bool* d_triple);
 	void clear();
 	void add_id_pos_mapping(int _id);
 	void reset_id_pos_mapping();
@@ -103,6 +104,7 @@ private:
 	bool filter_before_join();
 	bool constant_edge_filter(int _var_i);
 	void preid_filter(int _var_i);
+	//new
 	bool only_pre_filter_after_join();
 	void add_literal_candidate();
 	bool pre_var_handler();
@@ -126,7 +128,7 @@ private:
 	//BETTER?:change these params to members in class
 	//void acquire_all_id_lists(IdLists& _id_lists, IdListsLen& _id_lists_len, IDList& _can_list, vector<int>& _edges, int _id, unsigned _can_list_size);
 	void update_answer_list(IDList*& valid_ans_list, IDList& _can_list, unsigned* id_list, unsigned id_list_len, bool _is_literal);
-	bool join_two(vector< vector<int> >& _edges, IDList& _can_list, unsigned _can_list_size, int _id, bool _is_literal);
+	bool join_two(vector< vector<int> >& _edges, IDList& _can_list, unsigned _can_list_size, int _id, bool _is_ready);
 
 	bool multi_join();
 	//NOTICE:this is only used to join a BasicQuery
@@ -134,10 +136,11 @@ private:
 
 public:
 	Join();
-	Join(KVstore* _kvstore, TYPE_TRIPLE_NUM* _pre2num, TYPE_PREDICATE_ID _limitID_predicate, TYPE_ENTITY_LITERAL_ID _limitID_literal);
+	Join(KVstore* _kvstore, TYPE_TRIPLE_NUM* _pre2num, TYPE_PREDICATE_ID _limitID_predicate, TYPE_ENTITY_LITERAL_ID _limitID_literal,
+		TYPE_ENTITY_LITERAL_ID _limitID_entity);
 	//these functions can be called by Database
 	bool join_sparql(SPARQLquery& _sparql_query);
-	bool join_basic(BasicQuery* _basic_query);
+	bool join_basic(BasicQuery* _basic_query, bool* d_triple);
 	~Join();
 };
 

@@ -1,8 +1,8 @@
-CC=g++
-#CC=ccache g++
+#CC=g++
+CC= g++ -std=c++11
 
 lib_dir=../lib/
-socket_obj_dir=../../../.objs/
+socket_obj_dir=../../../../.objs/
 
 all: $(lib_dir)libgstoreconnector.a
 

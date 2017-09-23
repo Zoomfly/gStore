@@ -47,6 +47,8 @@ Database::Database()
 	this->literal_buffer = NULL;
 	this->literal_buffer_size = 0;
 
+	this->query_cache = new QueryCache();
+
 	this->if_loaded = false;
 
 	//this->resetIDinfo();
@@ -74,7 +76,8 @@ Database::Database(string _name)
 	this->kvstore = new KVstore(kv_store_path);
 
 	string vstree_store_path = store_path + "/vs_store";
-	this->vstree = new VSTree(vstree_store_path);
+	//this->vstree = new VSTree(vstree_store_path);
+	this->vstree = NULL;
 
 	string stringindex_store_path = store_path + "/stringindex_store";
 	this->stringindex = new StringIndex(stringindex_store_path);
@@ -96,6 +99,8 @@ Database::Database(string _name)
 	this->entity_buffer_size = 0;
 	this->literal_buffer = NULL;
 	this->literal_buffer_size = 0;
+
+	this->query_cache = new QueryCache();
 
 	//this->resetIDinfo();
 	this->initIDinfo();
@@ -299,6 +304,66 @@ Database::writeIDinfo()
 	fp = NULL;
 }
 
+void
+Database::saveIDinfo()
+{
+	//cout<<"now to write the id info"<<endl;
+	FILE* fp = NULL;
+	BlockInfo *bp = NULL, *tp = NULL;
+
+	fp = fopen(this->free_id_file_entity.c_str(), "w+");
+	if (fp == NULL)
+	{
+		cout << "write entity id info error" << endl;
+		return;
+	}
+	fwrite(&(this->limitID_entity), sizeof(int), 1, fp);
+	bp = this->freelist_entity;
+	while (bp != NULL)
+	{
+		fwrite(&(bp->num), sizeof(int), 1, fp);
+		tp = bp->next;
+		bp = tp;
+	}
+	fclose(fp);
+	fp = NULL;
+
+	fp = fopen(this->free_id_file_literal.c_str(), "w+");
+	if (fp == NULL)
+	{
+		cout << "write literal id info error" << endl;
+		return;
+	}
+	fwrite(&(this->limitID_literal), sizeof(int), 1, fp);
+	bp = this->freelist_literal;
+	while (bp != NULL)
+	{
+		fwrite(&(bp->num), sizeof(int), 1, fp);
+		tp = bp->next;
+		bp = tp;
+	}
+	fclose(fp);
+	fp = NULL;
+
+	fp = fopen(this->free_id_file_predicate.c_str(), "w+");
+	if (fp == NULL)
+	{
+		cout << "write predicate id info error" << endl;
+		return;
+	}
+	fwrite(&(this->limitID_predicate), sizeof(int), 1, fp);
+	bp = this->freelist_predicate;
+	while (bp != NULL)
+	{
+		fwrite(&(bp->num), sizeof(int), 1, fp);
+		tp = bp->next;
+		bp = tp;
+	}
+	fclose(fp);
+	fp = NULL;
+}
+
+
 //ID alloc garbage error(LITERAL_FIRST_ID or double) add base for literal
 TYPE_ENTITY_LITERAL_ID
 Database::allocEntityID()
@@ -439,9 +504,9 @@ Database::release(FILE* fp0)
 {
 	fprintf(fp0, "begin to delete DB!\n");
 	fflush(fp0);
-	this->vstree->saveTree();
-	delete this->vstree;
-	fprintf(fp0, "ok to delete vstree!\n");
+	//this->vstree->saveTree();
+	//delete this->vstree;
+	//fprintf(fp0, "ok to delete vstree!\n");
 	fflush(fp0);
 	delete this->kvstore;
 	fprintf(fp0, "ok to delete kvstore!\n");
@@ -459,6 +524,7 @@ Database::~Database()
 	//Util::debug_database = NULL;	//debug: when multiple databases
 }
 
+//TODO: update pre map if insert/delete
 void
 Database::setPreMap()
 {
@@ -501,6 +567,7 @@ Database::setPreMap()
 void
 Database::setStringBuffer()
 {
+	//TODO: assign according to memory manager
 	//BETTER?maybe different size for entity and literal, maybe different offset should be used
 	this->entity_buffer_size = (this->limitID_entity<50000000) ? this->limitID_entity : 50000000;
 	this->literal_buffer_size = (this->limitID_literal<50000000) ? this->limitID_literal : 50000000;
@@ -572,14 +639,36 @@ Database::load()
 	}
 
 	//TODO: acquire this arg from memory manager
+	//BETTER: get return value from subthread(using ref or file as hub)
 	unsigned vstree_cache = LRUCache::DEFAULT_CAPACITY;
-	bool flag = (this->vstree)->loadTree(vstree_cache);
-	if (!flag)
-	{
-		cout << "load tree error. @Database::load()" << endl;
-		return false;
-	}
+	bool flag;
+#ifndef THREAD_ON
+	//flag = (this->vstree)->loadTree(vstree_cache);
+	//if (!flag)
+	//{
+		//cout << "load tree error. @Database::load()" << endl;
+		//return false;
+	//}
 
+	(this->kvstore)->open();
+#else
+	//thread vstree_thread(&Database::load_vstree, this, vstree_cache);
+
+	int kv_mode = KVstore::READ_WRITE_MODE;
+	thread entity2id_thread(&Database::load_entity2id, this, kv_mode);
+	thread id2entity_thread(&Database::load_id2entity, this, kv_mode);
+	thread literal2id_thread(&Database::load_literal2id, this, kv_mode);
+	thread id2literal_thread(&Database::load_id2literal, this, kv_mode);
+	thread predicate2id_thread(&Database::load_predicate2id, this, kv_mode);
+#ifndef ONLY_READ
+	thread id2predicate_thread(&Database::load_id2predicate, this, kv_mode);
+#endif
+	thread sub2values_thread(&Database::load_sub2values, this, kv_mode);
+	thread obj2values_thread(&Database::load_obj2values, this, kv_mode);
+	thread pre2values_thread(&Database::load_pre2values, this, kv_mode);
+#endif
+
+	//this is very fast
 	flag = this->loadDBInfoFile();
 	if (!flag)
 	{
@@ -587,18 +676,49 @@ Database::load()
 		return false;
 	}
 
-	(this->kvstore)->open();
-
+	//NOTICE: we should also run some heavy work in the main thread
 	this->stringindex->load();
 
 	this->readIDinfo();
 
+#ifdef THREAD_ON
+	pre2values_thread.join();
+#endif
 	this->setPreMap();
+
+#ifdef THREAD_ON
+	id2entity_thread.join();
+	id2literal_thread.join();
+#endif
+
+	//TODO+BETTER: if we set string buffer using string index instead of B+Tree, then we can
+	//avoid to load id2entity and id2literal in ONLY_READ mode
+
 	//generate the string buffer for entity and literal, no need for predicate
-	//NOTICE:the total string size should not exceed 10G, assume that most strings length < 500
+	//NOTICE:the total string size should not exceed 20G, assume that most strings length < 500
 	//too many empty between entity and literal, so divide them
 	this->setStringBuffer();
+	//NOTICE: we should build string buffer from kvstore, not string index
+	//Because when searching in string index, it will first check if in buffer(but the buffer is being built)
 
+#ifndef ONLY_READ
+#ifdef THREAD_ON
+	id2predicate_thread.join();
+#endif
+#endif
+
+#ifdef THREAD_ON
+	entity2id_thread.join();
+	literal2id_thread.join();
+	predicate2id_thread.join();
+	sub2values_thread.join();
+	obj2values_thread.join();
+	//wait for vstree thread
+	//vstree_thread.join();
+#endif
+	//load cache of sub2values and obj2values
+	this->load_cache();
+	
 	//warm up always as finishing build(), to utilize the system buffer
 	//this->warmUp();
 	//DEBUG:the warmUp() calls query(), which will also output results, this is not we want
@@ -606,7 +726,421 @@ Database::load()
 	this->if_loaded = true;
 	cout << "finish load" << endl;
 
+	//TODO: for only-read application(like endpoint), 3 id2values trees can be closed now
+	//and we should load all trees on only READ mode
+
+	//HELP: just for checking infos(like kvstore)
+	check();
+
+#ifdef ONLY_READ
+	this->kvstore->close_id2entity();
+	this->kvstore->close_id2literal();
+#endif
+
 	return true;
+}
+
+void
+Database::load_cache()
+{
+	// get important pre ID
+	// a pre whose degree is more than 50% of max pre degree is important pre
+	cout << "get important pre ID" << endl;
+	this->get_important_preID();
+	cout << "total preID num is " << pre_num << endl;
+	cout << "important pre ID is: ";
+	for(int i = 0; i < important_preID.size(); ++i)
+		cout << important_preID[i] << ' ';
+	cout << endl;
+	this->load_candidate_pre2values();
+	this->load_important_sub2values();
+	this->load_important_obj2values();
+}
+
+void
+Database::get_important_preID()
+{
+	important_preID.clear();
+	unsigned max_degree = 0;
+	for(TYPE_PREDICATE_ID i = 0; i < limitID_predicate; ++i)
+		if (pre2num[i] > max_degree)
+			max_degree = pre2num[i];
+	unsigned limit_degree = max_degree / 2;
+	for(TYPE_PREDICATE_ID i = 0; i < limitID_predicate; ++i)
+		if (pre2num[i] > limit_degree)
+			important_preID.push_back(i);
+}
+
+void
+Database::load_important_obj2values()
+{
+	cout << "get important objID..." << endl;
+	this->get_important_objID();
+
+	this->build_CacheOfObj2values();
+}
+void
+Database::load_important_sub2values()
+{
+	cout << "get important subID..." << endl;
+	this->get_important_subID();
+
+	this->build_CacheOfSub2values();
+}
+
+void 
+Database::load_candidate_pre2values()
+{
+	cout << "get candidate preID..." << endl;
+	this->get_candidate_preID();
+
+	this->build_CacheOfPre2values();
+}
+
+void
+Database::get_candidate_preID()
+{
+	//cout << "now add cache of preID2values..." << endl;
+	/*for(int i = 0; i < important_preID.size(); ++i)
+	{
+		unsigned _size = this->kvstore->getPreListSize(important_preID[i]);
+		if (now_size + _size >= max_total_size) continue;
+		now_size += _size;
+		this->kvstore->AddIntoPreCache(important_preID[i]);
+	}*/
+	unsigned now_total_size = 0;
+	const unsigned max_total_size = 2000000000;//2G
+//	std::priority_queue <KEY_SIZE_VALUE> candidate_preID;
+	std::priority_queue <KEY_SIZE_VALUE, deque<KEY_SIZE_VALUE>, greater<KEY_SIZE_VALUE> > rubbish;
+	while(!rubbish.empty()) rubbish.pop();
+	while(!candidate_preID.empty()) candidate_preID.pop();
+	for(TYPE_PREDICATE_ID i = 0; i < limitID_predicate; ++i)
+	{
+		unsigned _value = 0;
+		unsigned _size;
+		
+		_size = this->kvstore->getPreListSize(i);
+		
+		if (!VList::isLongList(_size)) continue; // only long list need to be stored in cache
+
+		_value = pre2num[i];
+		if (_value == 0) continue;
+
+		if (_size + now_total_size < max_total_size)
+		{
+			candidate_preID.push(KEY_SIZE_VALUE(i, _size, _value));
+			now_total_size += _size;
+		}
+		else
+		{
+			if (candidate_preID.empty()) continue;
+			if (_value > candidate_preID.top().value)
+			{
+				while (now_total_size + _size >= max_total_size)
+				{
+					if (candidate_preID.top().value >= _value) break;
+					rubbish.push(candidate_preID.top());
+					now_total_size -= candidate_preID.top().size;
+					candidate_preID.pop();
+				}
+				if (now_total_size + _size < max_total_size)
+				{
+					now_total_size += _size;
+					candidate_preID.push(KEY_SIZE_VALUE(i, _size, _value));
+				}
+				while (!rubbish.empty())
+				{
+					if (now_total_size + rubbish.top().size < max_total_size)
+					{
+						now_total_size += rubbish.top().size;
+						candidate_preID.push(rubbish.top());
+					}
+					rubbish.pop();
+				}
+			}
+		}
+	}
+	cout << "finish getting candidate preID, the size is " << now_total_size << endl;
+}
+
+void
+Database::build_CacheOfPre2values()
+{
+	cout << "now add cache of preID2values..." << endl;
+	while (!candidate_preID.empty())
+	{
+		//cout << "add key " << important_objID.top().key << " size: " << important_objID.top().size << endl;
+		this->kvstore->AddIntoPreCache(candidate_preID.top().key);
+		candidate_preID.pop();
+	}
+}
+
+void
+Database::build_CacheOfObj2values()
+{
+	cout << "now add cache of objID2values..." << endl;
+	while (!important_objID.empty())
+	{
+		//cout << "add key " << important_objID.top().key << " size: " << important_objID.top().size << endl;
+		this->kvstore->AddIntoObjCache(important_objID.top().key);
+		important_objID.pop();
+	}
+}
+
+void
+Database::build_CacheOfSub2values()
+{
+	cout << "now add cache of subID2values..." << endl;
+	while (!important_subID.empty())
+	{
+		//cout << "add key " << important_subID.top().key << " size: " << important_subID.top().size << endl;
+		this->kvstore->AddIntoSubCache(important_subID.top().key);
+		important_subID.pop();
+	}
+}
+
+void
+Database::get_important_subID()
+{
+	while(!important_subID.empty()) important_subID.pop();
+	unsigned now_total_size = 0;
+	const string invalid = "";
+	const unsigned max_total_size = 2000000000;//2G
+	std::priority_queue <KEY_SIZE_VALUE, deque<KEY_SIZE_VALUE>, greater<KEY_SIZE_VALUE> > rubbish;
+	while(!rubbish.empty()) rubbish.pop();
+	// a sub who has largest degree with important pre is important subs
+	for(TYPE_ENTITY_LITERAL_ID i = 0; i < limitID_entity; ++i)
+	{
+		unsigned _value = 0;
+		unsigned _size = 0;
+		if (this->kvstore->getEntityByID(i) == invalid) continue;	
+		_size = this->kvstore->getSubListSize(i);
+		if (!VList::isLongList(_size)) continue; // only long list need to be stored in cache
+
+		for(unsigned j = 0; j < important_preID.size(); ++j)
+		{
+			_value += this->kvstore->getSubjectPredicateDegree(i, j);
+		}
+		if (_size + now_total_size < max_total_size)
+		{
+			important_subID.push(KEY_SIZE_VALUE(i, _size, _value));
+			now_total_size += _size;
+		}
+		else
+		{
+			if (important_subID.empty()) continue;
+			if (_value > important_subID.top().value)
+			{
+				while (now_total_size + _size >= max_total_size)
+				{
+					if (important_subID.top().value >= _value) break;
+					rubbish.push(important_subID.top());
+					now_total_size -= important_subID.top().size;
+					important_subID.pop();
+				}
+				if (now_total_size + _size < max_total_size)
+				{
+					now_total_size += _size;
+					important_subID.push(KEY_SIZE_VALUE(i, _size, _value));
+				}
+				while (!rubbish.empty())
+				{
+					if (now_total_size + rubbish.top().size < max_total_size)
+					{
+						now_total_size += rubbish.top().size;
+						important_subID.push(rubbish.top());
+					}
+					rubbish.pop();
+				}
+			}
+		}
+	}
+	cout << "finish getting important subID, the cache size is " << now_total_size << endl;
+}
+
+void
+Database::get_important_objID()
+{
+	while(!important_objID.empty()) important_objID.pop();
+	unsigned now_total_size = 0;
+	const unsigned max_total_size = 2000000000;//2G
+	const string invalid = "";
+	std::priority_queue <KEY_SIZE_VALUE, deque<KEY_SIZE_VALUE>, greater<KEY_SIZE_VALUE> > rubbish;
+	while(!rubbish.empty()) rubbish.pop();
+	// a sub who has largest degree with important pre is important subs
+	for(TYPE_ENTITY_LITERAL_ID i = 0; i < limitID_literal; ++i)
+	{
+		unsigned _value = 0;
+		unsigned _size;
+		string _tmp;
+		if (i < limitID_entity) _tmp = this->kvstore->getEntityByID(i);
+		else _tmp = this->kvstore->getLiteralByID(i);
+		if (_tmp == invalid) continue;
+
+		_size = this->kvstore->getObjListSize(i);
+		if (!VList::isLongList(_size)) continue; // only long list need to be stored in cache
+		
+		for(unsigned j = 0; j < important_preID.size(); ++j)
+		{
+			_value += this->kvstore->getObjectPredicateDegree(i, j);
+		}
+		
+		if (_size + now_total_size < max_total_size)
+		{
+			important_objID.push(KEY_SIZE_VALUE(i, _size, _value));
+			now_total_size += _size;
+		}
+		else
+		{
+			if (important_objID.empty()) continue;
+			if (_value > important_objID.top().value)
+			{
+				while (now_total_size + _size >= max_total_size)
+				{
+					if (important_objID.top().value >= _value) break;
+					rubbish.push(important_objID.top());
+					now_total_size -= important_objID.top().size;
+					important_objID.pop();
+				}
+				if (now_total_size + _size < max_total_size)
+				{
+					now_total_size += _size;
+					important_objID.push(KEY_SIZE_VALUE(i, _size, _value));
+				}
+				while (!rubbish.empty())
+				{
+					if (now_total_size + rubbish.top().size < max_total_size)
+					{
+						now_total_size += rubbish.top().size;
+						important_objID.push(rubbish.top());
+					}
+					rubbish.pop();
+				}
+			}
+		}
+	}
+	cout << endl;
+	cout << "finish getting important objID, the cache size is " << now_total_size << endl;
+}
+
+void 
+Database::load_entity2id(int _mode)
+{
+	this->kvstore->open_entity2id(_mode);
+}
+
+void 
+Database::load_id2entity(int _mode)
+{
+	this->kvstore->open_id2entity(_mode);
+}
+
+void 
+Database::load_literal2id(int _mode)
+{
+	this->kvstore->open_literal2id(_mode);
+}
+
+void 
+Database::load_id2literal(int _mode)
+{
+	this->kvstore->open_id2literal(_mode);
+}
+
+void 
+Database::load_predicate2id(int _mode)
+{
+	this->kvstore->open_predicate2id(_mode);
+}
+
+void 
+Database::load_id2predicate(int _mode)
+{
+	this->kvstore->open_id2predicate(_mode);
+}
+
+void 
+Database::load_sub2values(int _mode)
+{
+	this->kvstore->open_subID2values(_mode);
+}
+
+void 
+Database::load_obj2values(int _mode)
+{
+	this->kvstore->open_objID2values(_mode);
+}
+
+void 
+Database::load_pre2values(int _mode)
+{
+	this->kvstore->open_preID2values(_mode);
+}
+
+void 
+Database::load_vstree(unsigned _vstree_size)
+{
+	(this->vstree)->loadTree(_vstree_size);
+	cout<<"vstree loaded"<<endl;
+}
+
+void 
+Database::check()
+{
+cout<<"triple num: "<<this->triples_num<<endl;
+cout<<"pre num: "<<this->pre_num<<endl;
+cout<<"entity num: "<<this->entity_num<<endl;
+cout<<"literal num: "<<this->literal_num<<endl;
+
+string tstr;
+ //unsigned pid = this->kvstore->getIDByPredicate("<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>");
+ //cout<<"check: pre "<<pid<<endl;
+ //this->stringindex->randomAccess(pid, &tstr, false);
+ //cout<<"string index: "<<tstr<<endl;
+ ////cout<<"kvstore: "<<this->kvstore->getPredicateByID(pid)<<endl;
+
+	//cout<<"right pair: "<<62<<" "<<"<http://www.Department0.University0.edu/GraduateCourse11>"<<endl;
+ //unsigned sid = this->kvstore->getIDByEntity("<http://www.Department0.University0.edu/GraduateCourse11>");
+ //cout<<"check: sub "<<sid<<endl;
+ //this->stringindex->randomAccess(sid, &tstr, true);
+ //cout<<"string index: "<<tstr<<endl;
+ //cout<<"kvstore: "<<this->kvstore->getEntityByID(sid)<<endl;
+
+ //unsigned oid = this->kvstore->getIDByString("<http://www.lehigh.edu/~zhp2/2004/0401/univ-bench.owl#Course>");
+ //cout<<"check: obj "<<oid<<endl;
+ //this->stringindex->randomAccess(oid, &tstr, true);
+ //cout<<"string index: "<<tstr<<endl;
+ //cout<<"kvstore: "<<this->kvstore->getEntityByID(oid)<<endl;
+
+ //unsigned* list = NULL; unsigned len = 0;
+ //this->kvstore->getsubIDlistByobjIDpreID(oid, pid, list, len);
+ //FILE* fp = fopen("kv.txt", "w");
+//for(unsigned i = 0; i < len; ++i)
+//{
+	//fprintf(fp, "%u\n", list[i]);
+	//string ts;
+	//if(Util::is_literal_ele(list[i]))
+	//ts = this->kvstore->getLiteralByID(list[i]);
+	//else
+	//ts = this->kvstore->getEntityByID(list[i]);
+	//if(ts == "")
+	//{
+			//fprintf(fp, "Error in id2string\n");
+	//}
+	//else
+	//{
+			//fprintf(fp, "%s\n", ts.c_str());
+	//}
+	//this->stringindex->randomAccess(list[i], &tstr, true);
+	//fprintf(fp, "string index: %s\n", ts.c_str());
+//}
+//this->stringindex->randomAccess(86006539, &tstr, true);
+//cout<<"check: 86006539 "<<tstr<<endl;
+//cout<<this->kvstore->getStringByID(86006539)<<endl;
+//this->stringindex->randomAccess(82855205, &tstr, true);
+//cout<<this->kvstore->getStringByID(82855205)<<endl;
+//cout<<"check: 82855205 "<<tstr<<endl;
+//fclose(fp);
 }
 
 //NOTICE: we ensure that if the unload() exists normally, then all updates have already been written to disk
@@ -617,22 +1151,24 @@ Database::unload()
 {
 	//TODO: do we need to update the pre2num if update queries exist??
 	//or we just neglect this, that is ok because pre2num is just used to count
+	//cout << "delete pre2num" << endl;
 	delete[] this->pre2num;
 	this->pre2num = NULL;
-
+	//cout << "delete entity buffer" << endl;
 	delete this->entity_buffer;
 	this->entity_buffer = NULL;
+	//cout << "delete literal buffer" << endl;
 	delete this->literal_buffer;
 	this->literal_buffer = NULL;
 
 	//TODO: fflush the database file
-	this->vstree->saveTree();
-	delete this->vstree;
-	this->vstree = NULL;
-
+	//this->vstree->saveTree();
+	//delete this->vstree;
+	//this->vstree = NULL;
+	//cout << "delete kvstore" << endl;
 	delete this->kvstore;
 	this->kvstore = NULL;
-
+	//cout << "delete stringindex" << endl;
 	delete this->stringindex;
 	this->stringindex = NULL;
 
@@ -646,6 +1182,26 @@ Database::unload()
 	return true;
 }
 
+//this is used for checkpoint, we must ensure that modification is written to disk,
+//so flush() is a must
+bool Database::save()
+{
+	//this->vstree->saveTree();
+	this->kvstore->flush();
+	this->saveDBInfoFile();
+	this->saveIDinfo();
+
+	//TODO: fsync or using sync in Util
+	//should sync every file modified
+	//TODO: add flush for string index
+	//this->stringindex->flush();
+	this->clear_update_log();
+
+	cerr<<"database checkpoint: "<<this->getName()<<endl;
+
+	return true;
+}
+
 void Database::clear() 
 {
 	delete[] this->pre2num;
@@ -655,8 +1211,8 @@ void Database::clear()
 	delete this->literal_buffer;
 	this->literal_buffer = NULL;
 
-	delete this->vstree;
-	this->vstree = NULL;
+	//delete this->vstree;
+	//this->vstree = NULL;
 	delete this->kvstore;
 	this->kvstore = NULL;
 	delete this->stringindex;
@@ -669,15 +1225,45 @@ Database::getName()
 	return this->name;
 }
 
+TYPE_TRIPLE_NUM 
+Database::getTripleNum()
+{
+	return this->triples_num;
+}
+
+TYPE_ENTITY_LITERAL_ID 
+Database::getEntityNum()
+{
+	return this->entity_num;
+}
+
+TYPE_ENTITY_LITERAL_ID 
+Database::getLiteralNum()
+{
+	return this->literal_num;
+}
+
+TYPE_ENTITY_LITERAL_ID 
+Database::getSubNum()
+{
+	return this->sub_num;
+}
+
+TYPE_PREDICATE_ID 
+Database::getPreNum()
+{
+	return this->pre_num;
+}
+
 int
 Database::query(const string _query, ResultSet& _result_set, FILE* _fp)
 {
-	GeneralEvaluation general_evaluation(this->vstree, this->kvstore, this->stringindex, this->pre2num, this->limitID_predicate, this->limitID_literal);
+	GeneralEvaluation general_evaluation(this->vstree, this->kvstore, this->stringindex, this->query_cache, this->pre2num, this->limitID_predicate, this->limitID_literal,this->limitID_entity);
 
 	long tv_begin = Util::get_cur_time();
 
 	if (!general_evaluation.parseQuery(_query))
-		return false;
+		return -101;
 	long tv_parse = Util::get_cur_time();
 	cout << "after Parsing, used " << (tv_parse - tv_begin) << "ms." << endl;
 
@@ -685,6 +1271,7 @@ Database::query(const string _query, ResultSet& _result_set, FILE* _fp)
 	//for select, -100 by default, -101 means error
 	//for update, non-negative means true(and the num is updated triples num), -1 means error
 	int success_num = -100;  
+	bool need_output_answer = false;
 
 	//Query
 	if (general_evaluation.getQueryTree().getUpdateType() == QueryTree::Not_Update)
@@ -701,11 +1288,16 @@ Database::query(const string _query, ResultSet& _result_set, FILE* _fp)
 		cout << "after getFinalResult, used " << (tv_afget - tv_bfget) << "ms." << endl;
 
 		if(_fp != NULL)
-			general_evaluation.setNeedOutputAnswer();
+			need_output_answer = true;
+			//general_evaluation.setNeedOutputAnswer();
 	}
 	//Update
 	else
 	{
+#ifdef ONLY_READ
+		//invalid query because updates are not allowed in ONLY_READ mode
+		return -101;
+#endif
 		success_num = 0;
 		TripleWithObjType *update_triple = NULL;
 		TYPE_TRIPLE_NUM update_triple_num = 0;
@@ -715,22 +1307,23 @@ Database::query(const string _query, ResultSet& _result_set, FILE* _fp)
 			QueryTree::GroupPattern &update_pattern = general_evaluation.getQueryTree().getUpdateType() == QueryTree::Insert_Data ?
 				general_evaluation.getQueryTree().getInsertPatterns() : general_evaluation.getQueryTree().getDeletePatterns();
 
-			update_triple_num = update_pattern.patterns.size();
+			update_triple_num = update_pattern.sub_group_pattern.size();
 			update_triple = new TripleWithObjType[update_triple_num];
 
-			//for (int i = 0; i < (int)update_pattern.patterns.size(); i++)
-			for (TYPE_TRIPLE_NUM i = 0; i < update_triple_num; ++i)
-			{
-				TripleWithObjType::ObjectType object_type = TripleWithObjType::None;
-				if (update_pattern.patterns[i].object.value[0] == '<')
-					object_type = TripleWithObjType::Entity;
-				else
-					object_type = TripleWithObjType::Literal;
+			for (TYPE_TRIPLE_NUM i = 0; i < update_triple_num; i++)
+				if (update_pattern.sub_group_pattern[i].type == QueryTree::GroupPattern::SubGroupPattern::Pattern_type)
+				{
+					TripleWithObjType::ObjectType object_type = TripleWithObjType::None;
+					if (update_pattern.sub_group_pattern[i].pattern.object.value[0] == '<')
+						object_type = TripleWithObjType::Entity;
+					else
+						object_type = TripleWithObjType::Literal;
 
-				update_triple[i] = TripleWithObjType(update_pattern.patterns[i].subject.value,
-					update_pattern.patterns[i].predicate.value,
-					update_pattern.patterns[i].object.value, object_type);
-			}
+					update_triple[i] = TripleWithObjType(update_pattern.sub_group_pattern[i].pattern.subject.value,
+														 update_pattern.sub_group_pattern[i].pattern.predicate.value,
+														 update_pattern.sub_group_pattern[i].pattern.object.value, object_type);
+				}
+				else throw "Database::query failed";
 
 			if (general_evaluation.getQueryTree().getUpdateType() == QueryTree::Insert_Data)
 			{
@@ -759,18 +1352,19 @@ Database::query(const string _query, ResultSet& _result_set, FILE* _fp)
 			}
 		}
 
-		general_evaluation.releaseResultStack();
+		general_evaluation.releaseResult();
 		delete[] update_triple;
 	}
 
 	long tv_final = Util::get_cur_time();
 	cout << "Total time used: " << (tv_final - tv_begin) << "ms." << endl;
 
-	if (general_evaluation.needOutputAnswer())
+	//if (general_evaluation.needOutputAnswer())
+	if (need_output_answer)
 	{
-		unsigned ans_num = max((long long)_result_set.ansNum - _result_set.output_offset, (long long)0);
+		long long ans_num = max((long long)_result_set.ansNum - _result_set.output_offset, 0LL);
 		if (_result_set.output_limit != -1)
-			ans_num = min(ans_num, _result_set.output_limit);
+			ans_num = min(ans_num, (long long)_result_set.output_limit);
 		cout << "There has answer: " << ans_num << endl;
 		cout << "final result is : " << endl;
 		_result_set.output(_fp);
@@ -781,6 +1375,7 @@ Database::query(const string _query, ResultSet& _result_set, FILE* _fp)
 #ifdef DEBUG
 	cout<<"query success_num: "<<success_num<<endl;
 #endif
+
 	//cout<<"to check: "<<this->kvstore->getEntityByID(0)<<endl;
 	return success_num;
 }
@@ -797,6 +1392,12 @@ Database::query(const string _query, ResultSet& _result_set, FILE* _fp)
 bool
 Database::build(const string& _rdf_file)
 {
+	//NOTICE: it is not necessary to use multiple threads here, because some process may rely on others
+	//In addition, the memory is a bootleneck and it is dangerous to build serveral indices at a time
+	//For example, if we build id2string indices using different threads, they 
+	//all have to scan the dataset and only use a part of the data, which may be costly
+	//Besides, build process is already very fast, able to build freebase in 12h
+
 	//manage the id for a new database
 	this->resetIDinfo();
 
@@ -809,8 +1410,8 @@ Database::build(const string& _rdf_file)
 	string kv_store_path = store_path + "/kv_store";
 	Util::create_dir(kv_store_path);
 
-	string vstree_store_path = store_path + "/vs_store";
-	Util::create_dir(vstree_store_path);
+	//string vstree_store_path = store_path + "/vs_store";
+	//Util::create_dir(vstree_store_path);
 
 	string stringindex_store_path = store_path + "/stringindex_store";
 	Util::create_dir(stringindex_store_path);
@@ -847,21 +1448,21 @@ Database::build(const string& _rdf_file)
 	//this->kvstore->release();
 	//cout<<"release kvstore"<<endl;
 
-	long before_vstree = Util::get_cur_time();
+	//long before_vstree = Util::get_cur_time();
 	//(this->kvstore)->open();
-	string _entry_file = this->getSignatureBFile();
+	//string _entry_file = this->getSignatureBFile();
 
-	cout << "begin build VS-Tree on " << ret << "..." << endl;
+	//cout << "begin build VS-Tree on " << ret << "..." << endl;
 	//NOTICE: we can use larger buffer for vstree in building process, because it does not compete with others
 	//we only need to build vstree in this phase(no need for id tuples anymore)
 	//TODO: acquire this arg from memory manager
-	unsigned vstree_cache_size = 4 * LRUCache::DEFAULT_CAPACITY;
+	//unsigned vstree_cache_size = 4 * LRUCache::DEFAULT_CAPACITY;
 	//BETTER: we should set the parameter according to current memory usage
-	(this->vstree)->buildTree(_entry_file, vstree_cache_size);
+	//(this->vstree)->buildTree(_entry_file, vstree_cache_size);
 
 	long tv_build_end = Util::get_cur_time();
 
-	cout << "after build vstree, used " << (tv_build_end - before_vstree) << "ms." << endl;
+	//cout << "after build vstree, used " << (tv_build_end - before_vstree) << "ms." << endl;
 	cout << "after build, used " << (tv_build_end - tv_build_begin) << "ms." << endl;
 	cout << "finish build VS-Tree." << endl;
 
@@ -925,6 +1526,8 @@ Database::saveDBInfoFile()
 	fwrite(&this->pre_num, sizeof(int), 1, filePtr);
 	fwrite(&this->literal_num, sizeof(int), 1, filePtr);
 	fwrite(&this->encode_mode, sizeof(int), 1, filePtr);
+
+	fflush(filePtr);
 	fclose(filePtr);
 
 	//Util::triple_num = this->triples_num;
@@ -1198,6 +1801,9 @@ Database::encodeRDF_new(const string _rdf_file)
 	this->stringindex->setNum(StringIndexFile::Literal, this->literal_num);
 	this->stringindex->setNum(StringIndexFile::Predicate, this->pre_num);
 	this->stringindex->save(*this->kvstore);
+	//NOTICE: the string index can be parallized with readIDTuples and others
+	//However, we should read and build otehr indices only after the 6 trees and string index closed
+	//(to save memory)
 
 	long t3 = Util::get_cur_time();
 	cout << "after stringindex, used " << (t3 - t2) << "ms." << endl;
@@ -1219,6 +1825,10 @@ Database::encodeRDF_new(const string _rdf_file)
 	//NOTICE: the file can also be used for debugging, and a program can start just from the id tuples file
 	//(if copy the 6 id2string trees, no need to parse each time)
 	this->readIDTuples(_p_id_tuples);
+
+	//NOTICE: we can also build the signature when we are reading triples, and 
+	//update to the corresponding position in the signature file
+	//However, this may be costly due to frequent read/write
 
 	long t5 = Util::get_cur_time();
 	cout << "id tuples read, used " << (t5 - t4) << "ms." << endl;
@@ -1245,11 +1855,14 @@ Database::encodeRDF_new(const string _rdf_file)
 
 	//WARN:we must free the memory for id_tuples array
 	delete[] _p_id_tuples;
+
 	//for (TYPE_TRIPLE_NUM i = 0; i < this->triples_num; ++i)
 	//{
 		//delete[] _p_id_tuples[i];
 	//}
 	//delete[] _p_id_tuples;
+
+	//NOTICE: we should build vstree after id tuples are freed(to save memory)
 
 	bool flag = this->saveDBInfoFile();
 	if (!flag)
@@ -1301,81 +1914,81 @@ Database::build_s2xx(ID_TUPLE* _p_id_tuples)
 	this->kvstore->build_subID2values(_p_id_tuples, this->triples_num);
 
 	//save all entity_signature into binary file
-	string sig_binary_file = this->getSignatureBFile();
-	FILE* sig_fp = fopen(sig_binary_file.c_str(), "wb");
-	if (sig_fp == NULL) 
-	{
-		cout << "Failed to open : " << sig_binary_file << endl;
-		return;
-	}
+	//string sig_binary_file = this->getSignatureBFile();
+	//FILE* sig_fp = fopen(sig_binary_file.c_str(), "wb");
+	//if (sig_fp == NULL) 
+	//{
+		//cout << "Failed to open : " << sig_binary_file << endl;
+		//return;
+	//}
 
 	//NOTICE:in build process, all IDs are continuous growing
-	EntityBitSet tmp_bitset;
-	tmp_bitset.reset();
-	for(TYPE_ENTITY_LITERAL_ID i = 0; i < this->entity_num; ++i)
-	{
-		SigEntry* sig = new SigEntry(EntitySig(tmp_bitset), -1);
-		fwrite(sig, sizeof(SigEntry), 1, sig_fp);
-		delete sig;
-	}
+	//EntityBitSet tmp_bitset;
+	//tmp_bitset.reset();
+	//for(TYPE_ENTITY_LITERAL_ID i = 0; i < this->entity_num; ++i)
+	//{
+		//SigEntry* sig = new SigEntry(EntitySig(tmp_bitset), -1);
+		//fwrite(sig, sizeof(SigEntry), 1, sig_fp);
+		//delete sig;
+	//}
 
-	TYPE_ENTITY_LITERAL_ID prev_entity_id = INVALID_ENTITY_LITERAL_ID;
+	//TYPE_ENTITY_LITERAL_ID prev_entity_id = INVALID_ENTITY_LITERAL_ID;
 	//int prev_entity_id = -1;
 	
 	//NOTICE: i*3 + j maybe break the unsigned limit
 	//for (unsigned long i = 0; i < this->triples_num; ++i)
-	for (TYPE_TRIPLE_NUM i = 0; i < this->triples_num; ++i)
-	{
-		TYPE_ENTITY_LITERAL_ID subid = _p_id_tuples[i].subid;
-		TYPE_PREDICATE_ID preid = _p_id_tuples[i].preid;
-		TYPE_ENTITY_LITERAL_ID objid = _p_id_tuples[i].objid;
-		//TYPE_ENTITY_LITERAL_ID subid = _p_id_tuples[i*3+0];
-		//TYPE_PREDICATE_ID preid = _p_id_tuples[i*3+1];
-		//TYPE_ENTITY_LITERAL_ID objid = _p_id_tuples[i*3+2];
-		if(subid != prev_entity_id)
-		{
-			if(prev_entity_id != INVALID_ENTITY_LITERAL_ID)
-			//if(prev_entity_id != -1)
-			{
-#ifdef DEBUG
-				//if(prev_entity_id == 13)
-				//{
-					//cout<<"yy: "<<Signature::BitSet2str(tmp_bitset)<<endl;
-				//}
-#endif
-				//NOTICE: we must do twice, we need to locate on the same entry to deal, so we must place in order
-				SigEntry* sig = new SigEntry(EntitySig(tmp_bitset), prev_entity_id);
-				//write the sig entry
-				fseek(sig_fp, sizeof(SigEntry) * prev_entity_id, SEEK_SET);
-				fwrite(sig, sizeof(SigEntry), 1, sig_fp);
-				//_all_bitset |= *_entity_bitset[i];
-				delete sig;
-			}
-			prev_entity_id = subid;
-			tmp_bitset.reset();
-			Signature::encodeEdge2Entity(tmp_bitset, preid, objid, Util::EDGE_OUT);
-			//Signature::encodePredicate2Entity(preid, _tmp_bitset, Util::EDGE_OUT);
-			//Signature::encodeStr2Entity(objid, _tmp_bitset);
-		}
-		else
-		{
-			Signature::encodeEdge2Entity(tmp_bitset, preid, objid, Util::EDGE_OUT);
-		}
-	}
+	//for (TYPE_TRIPLE_NUM i = 0; i < this->triples_num; ++i)
+	//{
+		//TYPE_ENTITY_LITERAL_ID subid = _p_id_tuples[i].subid;
+		//TYPE_PREDICATE_ID preid = _p_id_tuples[i].preid;
+		//TYPE_ENTITY_LITERAL_ID objid = _p_id_tuples[i].objid;
+		////TYPE_ENTITY_LITERAL_ID subid = _p_id_tuples[i*3+0];
+		////TYPE_PREDICATE_ID preid = _p_id_tuples[i*3+1];
+		////TYPE_ENTITY_LITERAL_ID objid = _p_id_tuples[i*3+2];
+		//if(subid != prev_entity_id)
+		//{
+			//if(prev_entity_id != INVALID_ENTITY_LITERAL_ID)
+			////if(prev_entity_id != -1)
+			//{
+//#ifdef DEBUG
+				////if(prev_entity_id == 13)
+				////{
+					////cout<<"yy: "<<Signature::BitSet2str(tmp_bitset)<<endl;
+				////}
+//#endif
+				////NOTICE: we must do twice, we need to locate on the same entry to deal, so we must place in order
+				//SigEntry* sig = new SigEntry(EntitySig(tmp_bitset), prev_entity_id);
+				////write the sig entry
+				//fseek(sig_fp, sizeof(SigEntry) * prev_entity_id, SEEK_SET);
+				//fwrite(sig, sizeof(SigEntry), 1, sig_fp);
+				////_all_bitset |= *_entity_bitset[i];
+				//delete sig;
+			//}
+			//prev_entity_id = subid;
+			//tmp_bitset.reset();
+			//Signature::encodeEdge2Entity(tmp_bitset, preid, objid, Util::EDGE_OUT);
+			////Signature::encodePredicate2Entity(preid, _tmp_bitset, Util::EDGE_OUT);
+			////Signature::encodeStr2Entity(objid, _tmp_bitset);
+		//}
+		//else
+		//{
+			//Signature::encodeEdge2Entity(tmp_bitset, preid, objid, Util::EDGE_OUT);
+		//}
+	//}
 
-	//NOTICE: remember to write the last entity's signature
-	if(prev_entity_id != INVALID_ENTITY_LITERAL_ID)
-	//if(prev_entity_id != -1)
-	{
-		SigEntry* sig = new SigEntry(EntitySig(tmp_bitset), prev_entity_id);
-		//write the sig entry
-		fseek(sig_fp, sizeof(SigEntry) * prev_entity_id, SEEK_SET);
-		fwrite(sig, sizeof(SigEntry), 1, sig_fp);
-		//_all_bitset |= *_entity_bitset[i];
-		delete sig;
-	}
+	////NOTICE: remember to write the last entity's signature
+	//if(prev_entity_id != INVALID_ENTITY_LITERAL_ID)
+	////if(prev_entity_id != -1)
+	//{
+		//SigEntry* sig = new SigEntry(EntitySig(tmp_bitset), prev_entity_id);
+		////write the sig entry
+		//fseek(sig_fp, sizeof(SigEntry) * prev_entity_id, SEEK_SET);
+		//fwrite(sig, sizeof(SigEntry), 1, sig_fp);
+		////_all_bitset |= *_entity_bitset[i];
+		//delete sig;
+	//}
 
-	fclose(sig_fp);
+	//fclose(sig_fp);
 }
 
 void
@@ -1386,114 +1999,114 @@ Database::build_o2xx(ID_TUPLE* _p_id_tuples)
 	this->kvstore->build_objID2values(_p_id_tuples, this->triples_num);
 
 	//save all entity_signature into binary file
-	string sig_binary_file = this->getSignatureBFile();
-	//NOTICE: this is different from build_s2xx, the file already exists
-	FILE* sig_fp = fopen(sig_binary_file.c_str(), "rb+");
-	if (sig_fp == NULL) 
-	{
-		cout << "Failed to open : " << sig_binary_file << endl;
-		return;
-	}
+	//string sig_binary_file = this->getSignatureBFile();
+	////NOTICE: this is different from build_s2xx, the file already exists
+	//FILE* sig_fp = fopen(sig_binary_file.c_str(), "rb+");
+	//if (sig_fp == NULL) 
+	//{
+		//cout << "Failed to open : " << sig_binary_file << endl;
+		//return;
+	//}
 
-	//NOTICE:in build process, all IDs are continuous growing
-	//TODO:use unsigned for type and -1 should be changed
-	TYPE_ENTITY_LITERAL_ID prev_entity_id = INVALID_ENTITY_LITERAL_ID;
-	//int prev_entity_id = -1;
-	EntityBitSet tmp_bitset;
+	////NOTICE:in build process, all IDs are continuous growing
+	////TODO:use unsigned for type and -1 should be changed
+	//TYPE_ENTITY_LITERAL_ID prev_entity_id = INVALID_ENTITY_LITERAL_ID;
+	////int prev_entity_id = -1;
+	//EntityBitSet tmp_bitset;
 
-	//NOTICE: i*3 + j maybe break the unsigned limit
-	//for (unsigned long i = 0; i < this->triples_num; ++i)
-	for (TYPE_TRIPLE_NUM i = 0; i < this->triples_num; ++i)
-	{
-		TYPE_ENTITY_LITERAL_ID subid = _p_id_tuples[i].subid;
-		TYPE_PREDICATE_ID preid = _p_id_tuples[i].preid;
-		TYPE_ENTITY_LITERAL_ID objid = _p_id_tuples[i].objid;
-		//TYPE_ENTITY_LITERAL_ID subid = _p_id_tuples[i*3+0];
-		//TYPE_PREDICATE_ID preid = _p_id_tuples[i*3+1];
-		//TYPE_ENTITY_LITERAL_ID objid = _p_id_tuples[i*3+2];
+	////NOTICE: i*3 + j maybe break the unsigned limit
+	////for (unsigned long i = 0; i < this->triples_num; ++i)
+	//for (TYPE_TRIPLE_NUM i = 0; i < this->triples_num; ++i)
+	//{
+		//TYPE_ENTITY_LITERAL_ID subid = _p_id_tuples[i].subid;
+		//TYPE_PREDICATE_ID preid = _p_id_tuples[i].preid;
+		//TYPE_ENTITY_LITERAL_ID objid = _p_id_tuples[i].objid;
+		////TYPE_ENTITY_LITERAL_ID subid = _p_id_tuples[i*3+0];
+		////TYPE_PREDICATE_ID preid = _p_id_tuples[i*3+1];
+		////TYPE_ENTITY_LITERAL_ID objid = _p_id_tuples[i*3+2];
 
 
-		if(Util::is_literal_ele(objid))
-		{
-			continue;
-		}
+		//if(Util::is_literal_ele(objid))
+		//{
+			//continue;
+		//}
 
-		if(objid != prev_entity_id)
-		{
-			//if(prev_entity_id != -1)
-			if(prev_entity_id != INVALID_ENTITY_LITERAL_ID)
-			{
-				//NOTICE: we must do twice, we need to locate on the same entry to deal, so we must place in order
-				fseek(sig_fp, sizeof(SigEntry) * prev_entity_id, SEEK_SET);
-				SigEntry* old_sig = new SigEntry();
-				fread(old_sig, sizeof(SigEntry), 1, sig_fp);
-#ifdef DEBUG
-				//cout<<"to write a signature: "<<prev_entity_id<<endl;
-				//cout<<prev_entity_id<<endl;
-				//if(prev_entity_id == 13)
-				//{
-					//cout<<"yy: "<<Signature::BitSet2str(tmp_bitset)<<endl;
-				//}
-#endif
-				tmp_bitset |= old_sig->getEntitySig().entityBitSet;
-				delete old_sig;
+		//if(objid != prev_entity_id)
+		//{
+			////if(prev_entity_id != -1)
+			//if(prev_entity_id != INVALID_ENTITY_LITERAL_ID)
+			//{
+				////NOTICE: we must do twice, we need to locate on the same entry to deal, so we must place in order
+				//fseek(sig_fp, sizeof(SigEntry) * prev_entity_id, SEEK_SET);
+				//SigEntry* old_sig = new SigEntry();
+				//fread(old_sig, sizeof(SigEntry), 1, sig_fp);
+//#ifdef DEBUG
+				////cout<<"to write a signature: "<<prev_entity_id<<endl;
+				////cout<<prev_entity_id<<endl;
+				////if(prev_entity_id == 13)
+				////{
+					////cout<<"yy: "<<Signature::BitSet2str(tmp_bitset)<<endl;
+				////}
+//#endif
+				//tmp_bitset |= old_sig->getEntitySig().entityBitSet;
+				//delete old_sig;
 				
-#ifdef DEBUG
-				//if(prev_entity_id == 13)
-				//{
-					//cout<<"yy: "<<Signature::BitSet2str(tmp_bitset)<<endl;
-				//}
-#endif
+//#ifdef DEBUG
+				////if(prev_entity_id == 13)
+				////{
+					////cout<<"yy: "<<Signature::BitSet2str(tmp_bitset)<<endl;
+				////}
+//#endif
 				
-					//write the sig entry
-				SigEntry* sig = new SigEntry(EntitySig(tmp_bitset), prev_entity_id);
-				fseek(sig_fp, sizeof(SigEntry) * prev_entity_id, SEEK_SET);
-				fwrite(sig, sizeof(SigEntry), 1, sig_fp);
-				//_all_bitset |= *_entity_bitset[i];
-				delete sig;
-			}
+					////write the sig entry
+				//SigEntry* sig = new SigEntry(EntitySig(tmp_bitset), prev_entity_id);
+				//fseek(sig_fp, sizeof(SigEntry) * prev_entity_id, SEEK_SET);
+				//fwrite(sig, sizeof(SigEntry), 1, sig_fp);
+				////_all_bitset |= *_entity_bitset[i];
+				//delete sig;
+			//}
 
-#ifdef DEBUG
-			//cout<<"now is a new signature: "<<objid<<endl;
-#endif
+//#ifdef DEBUG
+			////cout<<"now is a new signature: "<<objid<<endl;
+//#endif
 
-			prev_entity_id = objid;
-			tmp_bitset.reset();
-			//cout<<"bitset reset"<<endl;
-			Signature::encodeEdge2Entity(tmp_bitset, preid, subid, Util::EDGE_IN);
-			//cout<<"edge encoded"<<endl;
-			//Signature::encodePredicate2Entity(preid, _tmp_bitset, Util::EDGE_IN);
-			//Signature::encodeStr2Entity(subid, _tmp_bitset);
-		}
-		else
-		{
-			//cout<<"same signature: "<<objid<<" "<<preid<<" "<<subid<<endl;
-			Signature::encodeEdge2Entity(tmp_bitset, preid, subid, Util::EDGE_IN);
-			//cout<<"edge encoded"<<endl;
-		}
-	}
-	//cout<<"loop ended!"<<endl;
+			//prev_entity_id = objid;
+			//tmp_bitset.reset();
+			////cout<<"bitset reset"<<endl;
+			//Signature::encodeEdge2Entity(tmp_bitset, preid, subid, Util::EDGE_IN);
+			////cout<<"edge encoded"<<endl;
+			////Signature::encodePredicate2Entity(preid, _tmp_bitset, Util::EDGE_IN);
+			////Signature::encodeStr2Entity(subid, _tmp_bitset);
+		//}
+		//else
+		//{
+			////cout<<"same signature: "<<objid<<" "<<preid<<" "<<subid<<endl;
+			//Signature::encodeEdge2Entity(tmp_bitset, preid, subid, Util::EDGE_IN);
+			////cout<<"edge encoded"<<endl;
+		//}
+	//}
+	////cout<<"loop ended!"<<endl;
 
-	//NOTICE: remember to write the last entity's signature
-	if(prev_entity_id != INVALID_ENTITY_LITERAL_ID)
-	//if(prev_entity_id != -1)
-	{
-		//cout<<"to write the last signature"<<endl;
+	////NOTICE: remember to write the last entity's signature
+	//if(prev_entity_id != INVALID_ENTITY_LITERAL_ID)
+	////if(prev_entity_id != -1)
+	//{
+		////cout<<"to write the last signature"<<endl;
 
-		fseek(sig_fp, sizeof(SigEntry) * prev_entity_id, SEEK_SET);
-		SigEntry* old_sig = new SigEntry();
-		fread(old_sig, sizeof(SigEntry), 1, sig_fp);
-		tmp_bitset |= old_sig->getEntitySig().entityBitSet;
-		delete old_sig;
-		//write the sig entry
-		SigEntry* sig = new SigEntry(EntitySig(tmp_bitset), prev_entity_id);
-		fseek(sig_fp, sizeof(SigEntry) * prev_entity_id, SEEK_SET);
-		fwrite(sig, sizeof(SigEntry), 1, sig_fp);
-		//_all_bitset |= *_entity_bitset[i];
-		delete sig;
-	}
+		//fseek(sig_fp, sizeof(SigEntry) * prev_entity_id, SEEK_SET);
+		//SigEntry* old_sig = new SigEntry();
+		//fread(old_sig, sizeof(SigEntry), 1, sig_fp);
+		//tmp_bitset |= old_sig->getEntitySig().entityBitSet;
+		//delete old_sig;
+		////write the sig entry
+		//SigEntry* sig = new SigEntry(EntitySig(tmp_bitset), prev_entity_id);
+		//fseek(sig_fp, sizeof(SigEntry) * prev_entity_id, SEEK_SET);
+		//fwrite(sig, sizeof(SigEntry), 1, sig_fp);
+		////_all_bitset |= *_entity_bitset[i];
+		//delete sig;
+	//}
 
-	fclose(sig_fp);
+	//fclose(sig_fp);
 }
 
 void
@@ -1590,7 +2203,7 @@ Database::sub2id_pre2id_obj2id_RDFintoSignature(const string _rdf_file)
 	//parse a file
 	RDFParser _parser(_fin);
 
-	Util::logging("==> while(true)");
+	//Util::logging("==> while(true)");
 
 	while (true)
 	{
@@ -1630,6 +2243,10 @@ Database::sub2id_pre2id_obj2id_RDFintoSignature(const string _rdf_file)
 				//_id_tuples_max = _new_tuples_len;
 			//}
 
+			//TODO: use 3 threads to deal with sub, obj, pre separately
+			//However, the cost of new /delete threads may be high
+			//We need a thread pool!
+
 			// For subject
 			// (all subject is entity, some object is entity, the other is literal)
 			string _sub = triple_array[i].getSubject();
@@ -1639,6 +2256,7 @@ Database::sub2id_pre2id_obj2id_RDFintoSignature(const string _rdf_file)
 			{
 				//_sub_id = this->entity_num;
 				_sub_id = this->allocEntityID();
+				this->sub_num++;
 				//this->entity_num++;
 				(this->kvstore)->setIDByEntity(_sub, _sub_id);
 				(this->kvstore)->setEntityByID(_sub_id, _sub);
@@ -1781,9 +2399,10 @@ Database::sub2id_pre2id_obj2id_RDFintoSignature(const string _rdf_file)
 		}
 	}
 
-	cout<<"==> end while(true)"<<endl;
+	//cout<<"==> end while(true)"<<endl;
 
 	delete[] triple_array;
+	triple_array = NULL;
 	_fin.close();
 	_six_tuples_fout.close();
 	fclose(fp);
@@ -1986,13 +2605,13 @@ Database::insertTriple(const TripleWithObjType& _triple, vector<unsigned>* _vert
 	if (_is_new_sub)
 	{
 		//cout<<"to insert: "<<_sub_id<<" "<<this->kvstore->getEntityByID(_sub_id)<<endl;
-		SigEntry _sig(_sub_id, _sub_entity_bitset);
-		(this->vstree)->insertEntry(_sig);
+		//SigEntry _sig(_sub_id, _sub_entity_bitset);
+		//(this->vstree)->insertEntry(_sig);
 	}
 	else
 	{
 		//cout<<"to update: "<<_sub_id<<" "<<this->kvstore->getEntityByID(_sub_id)<<endl;
-		(this->vstree)->updateEntry(_sub_id, _sub_entity_bitset);
+		//(this->vstree)->updateEntry(_sub_id, _sub_entity_bitset);
 	}
 
 	//if the object is an entity, then update or insert this entity's entry.
@@ -2007,23 +2626,23 @@ Database::insertTriple(const TripleWithObjType& _triple, vector<unsigned>* _vert
 		if (_is_new_obj)
 		{
 			//cout<<"to insert: "<<_obj_id<<" "<<this->kvstore->getEntityByID(_obj_id)<<endl;
-			SigEntry _sig(_obj_id, _obj_entity_bitset);
-			(this->vstree)->insertEntry(_sig);
+			//SigEntry _sig(_obj_id, _obj_entity_bitset);
+			//(this->vstree)->insertEntry(_sig);
 		}
 		else
 		{
 			//cout<<"to update: "<<_obj_id<<" "<<this->kvstore->getEntityByID(_obj_id)<<endl;
-			(this->vstree)->updateEntry(_obj_id, _obj_entity_bitset);
+			//(this->vstree)->updateEntry(_obj_id, _obj_entity_bitset);
 		}
 	}
 
 	long tv_vs_store_end = Util::get_cur_time();
 
 	//debug
-	{
-		cout << "update kv_store, used " << (tv_kv_store_end - tv_kv_store_begin) << "ms." << endl;
-		cout << "update vs_store, used " << (tv_vs_store_end - tv_kv_store_end) << "ms." << endl;
-	}
+	//{
+		//cout << "update kv_store, used " << (tv_kv_store_end - tv_kv_store_begin) << "ms." << endl;
+		//cout << "update vs_store, used " << (tv_vs_store_end - tv_kv_store_end) << "ms." << endl;
+	//}
 
 	return true;
 	//return updateLen;
@@ -2067,12 +2686,12 @@ Database::removeTriple(const TripleWithObjType& _triple, vector<unsigned>* _vert
 		this->triples_num--;
 	}
 
-	cout << "triple existence checked" << endl;
+	//cout << "triple existence checked" << endl;
 
 	//remove from sp2o op2s s2po o2ps s2o o2s
 	//sub2id, pre2id and obj2id will not be updated
 	(this->kvstore)->updateTupleslist_remove(_sub_id, _pre_id, _obj_id);
-	cout << "11 trees updated" << endl;
+	//cout << "11 trees updated" << endl;
 
 	long tv_kv_store_end = Util::get_cur_time();
 
@@ -2080,11 +2699,11 @@ Database::removeTriple(const TripleWithObjType& _triple, vector<unsigned>* _vert
 	//if subject become an isolated point, remove its corresponding entry
 	if (sub_degree == 0)
 	{
-		cout<<"to remove entry for sub"<<endl;
-		cout<<_sub_id << " "<<this->kvstore->getEntityByID(_sub_id)<<endl;
+		//cout<<"to remove entry for sub"<<endl;
+		//cout<<_sub_id << " "<<this->kvstore->getEntityByID(_sub_id)<<endl;
 		this->kvstore->subEntityByID(_sub_id);
 		this->kvstore->subIDByEntity(_triple.subject);
-		(this->vstree)->removeEntry(_sub_id);
+		//(this->vstree)->removeEntry(_sub_id);
 		this->freeEntityID(_sub_id);
 		this->sub_num--;
 		//update the string buffer
@@ -2105,7 +2724,7 @@ Database::removeTriple(const TripleWithObjType& _triple, vector<unsigned>* _vert
 		this->calculateEntityBitSet(_sub_id, _entity_bitset);
 		//NOTICE:can not use updateEntry as insert because this is in remove
 		//In insert we can add a OR operation and all is ok
-		(this->vstree)->replaceEntry(_sub_id, _entity_bitset);
+		//(this->vstree)->replaceEntry(_sub_id, _entity_bitset);
 	}
 	//cout<<"subject dealed"<<endl;
 
@@ -2120,7 +2739,7 @@ Database::removeTriple(const TripleWithObjType& _triple, vector<unsigned>* _vert
 			//cout<<_obj_id << " "<<this->kvstore->getEntityByID(_obj_id)<<endl;
 			this->kvstore->subEntityByID(_obj_id);
 			this->kvstore->subIDByEntity(_triple.object);
-			this->vstree->removeEntry(_obj_id);
+			//this->vstree->removeEntry(_obj_id);
 			this->freeEntityID(_obj_id);
 			//update the string buffer
 			if (_obj_id < this->entity_buffer_size)
@@ -2134,10 +2753,10 @@ Database::removeTriple(const TripleWithObjType& _triple, vector<unsigned>* _vert
 		{
 			//cout<<"to replace entry for obj"<<endl;
 			//cout<<_obj_id << " "<<this->kvstore->getEntityByID(_obj_id)<<endl;
-			EntityBitSet _entity_bitset;
-			_entity_bitset.reset();
-			this->calculateEntityBitSet(_obj_id, _entity_bitset);
-			this->vstree->replaceEntry(_obj_id, _entity_bitset);
+			//EntityBitSet _entity_bitset;
+			//_entity_bitset.reset();
+			//this->calculateEntityBitSet(_obj_id, _entity_bitset);
+			//this->vstree->replaceEntry(_obj_id, _entity_bitset);
 		}
 	}
 	else
@@ -2174,10 +2793,10 @@ Database::removeTriple(const TripleWithObjType& _triple, vector<unsigned>* _vert
 	long tv_vs_store_end = Util::get_cur_time();
 
 	//debug
-	{
-		cout << "update kv_store, used " << (tv_kv_store_end - tv_kv_store_begin) << "ms." << endl;
-		cout << "update vs_store, used " << (tv_vs_store_end - tv_kv_store_end) << "ms." << endl;
-	}
+	//{
+		//cout << "update kv_store, used " << (tv_kv_store_end - tv_kv_store_begin) << "ms." << endl;
+		//cout << "update vs_store, used " << (tv_vs_store_end - tv_kv_store_end) << "ms." << endl;
+	//}
 	return true;
 }
 
@@ -2239,6 +2858,7 @@ Database::insert(std::string _rdf_file, bool _is_restore)
 	}
 
 	delete[] triple_array;
+	triple_array = NULL;
 	long tv_insert = Util::get_cur_time();
 	cout << "after insert, used " << (tv_insert - tv_load) << "ms." << endl;
 	//BETTER:update kvstore and vstree separately, to lower the memory cost
@@ -2333,6 +2953,7 @@ Database::remove(std::string _rdf_file, bool _is_restore)
 	//(only when using group insertion/deletion)
 	//or reduce the array size
 	delete[] triple_array;
+	triple_array = NULL;
 	long tv_remove = Util::get_cur_time();
 	cout << "after remove, used " << (tv_remove - tv_load) << "ms." << endl;
 
@@ -2350,7 +2971,8 @@ Database::remove(std::string _rdf_file, bool _is_restore)
 	cout << "remove rdf triples done." << endl;
 	cout<<"removed triples num: "<<success_num<<endl;
 
-	if(this->vstree->isEmpty())
+	//if(this->vstree->isEmpty())
+	if(this->triples_num == 0)
 	{
 		this->resetIDinfo();
 	}
@@ -2809,16 +3431,17 @@ Database::insert(const TripleWithObjType* _triples, TYPE_TRIPLE_NUM _triple_num,
 		delete[] id_tuples[i];
 	}
 	delete[] id_tuples;
+	id_tuples = NULL;
 
-	for (it = old_sigmap.begin(); it != old_sigmap.end(); ++it)
-	{
-		this->vstree->updateEntry(it->first, it->second);
-	}
-	for (it = new_sigmap.begin(); it != new_sigmap.end(); ++it)
-	{
-		SigEntry _sig(it->first, it->second);
-		this->vstree->insertEntry(_sig);
-	}
+	//for (it = old_sigmap.begin(); it != old_sigmap.end(); ++it)
+	//{
+		//this->vstree->updateEntry(it->first, it->second);
+	//}
+	//for (it = new_sigmap.begin(); it != new_sigmap.end(); ++it)
+	//{
+		//SigEntry _sig(it->first, it->second);
+		//this->vstree->insertEntry(_sig);
+	//}
 #else
 	//NOTICE:we deal with insertions one by one here
 	//Callers should save the vstree(node and info) after calling this function
@@ -3008,7 +3631,7 @@ Database::remove(const TripleWithObjType* _triples, TYPE_TRIPLE_NUM _triple_num,
 						tmpstr = this->kvstore->getEntityByID(_sub_id);
 						this->kvstore->subEntityByID(_sub_id);
 						this->kvstore->subIDByEntity(tmpstr);
-						(this->vstree)->removeEntry(_sub_id);
+						//(this->vstree)->removeEntry(_sub_id);
 						this->freeEntityID(_sub_id);
 						this->sub_num--;
 						//add info and update buffer
@@ -3022,7 +3645,7 @@ Database::remove(const TripleWithObjType* _triples, TYPE_TRIPLE_NUM _triple_num,
 					{
 						tmpset.reset();
 						this->calculateEntityBitSet(_sub_id, tmpset);
-						this->vstree->replaceEntry(_sub_id, tmpset);
+						//this->vstree->replaceEntry(_sub_id, tmpset);
 					}
 				}
 
@@ -3089,7 +3712,7 @@ Database::remove(const TripleWithObjType* _triples, TYPE_TRIPLE_NUM _triple_num,
 							tmpstr = this->kvstore->getEntityByID(_obj_id);
 							this->kvstore->subEntityByID(_obj_id);
 							this->kvstore->subIDByEntity(tmpstr);
-							(this->vstree)->removeEntry(_obj_id);
+							//(this->vstree)->removeEntry(_obj_id);
 							this->freeEntityID(_obj_id);
 							//add info and update buffer
 							vertices.push_back(_obj_id);
@@ -3102,7 +3725,7 @@ Database::remove(const TripleWithObjType* _triples, TYPE_TRIPLE_NUM _triple_num,
 						{
 							tmpset.reset();
 							this->calculateEntityBitSet(_obj_id, tmpset);
-							this->vstree->replaceEntry(_obj_id, tmpset);
+							//this->vstree->replaceEntry(_obj_id, tmpset);
 						}
 					}
 					else
@@ -3195,6 +3818,7 @@ Database::remove(const TripleWithObjType* _triples, TYPE_TRIPLE_NUM _triple_num,
 		delete[] id_tuples[i];
 	}
 	delete[] id_tuples;
+	id_tuples = NULL;
 #else
 	//NOTICE:we deal with deletions one by one here
 	//Callers should save the vstree(node and info) after calling this function
@@ -3214,7 +3838,8 @@ Database::remove(const TripleWithObjType* _triples, TYPE_TRIPLE_NUM _triple_num,
 
 	//BETTER+TODO:this will require us to lock all when remove process not ends(in multiple threads cases)
 	//An considerable idea is to check if empty after every triple removed
-	if(this->vstree->isEmpty())
+	//if(this->vstree->isEmpty())
+	if(this->triples_num == 0)
 	{
 		this->resetIDinfo();
 	}
@@ -3222,6 +3847,7 @@ Database::remove(const TripleWithObjType* _triples, TYPE_TRIPLE_NUM _triple_num,
 	return valid_num;
 }
 
+//TODO: check and improve the backup program
 bool 
 Database::backup() 
 {
@@ -3244,7 +3870,7 @@ Database::backup()
 	sys_cmd = "rm " + backup_path + '/' + this->update_log;
 	system(sys_cmd.c_str());
 
-	this->vstree->saveTree();
+	//this->vstree->saveTree();
 	this->kvstore->flush();
 
 	this->clear_update_log();
