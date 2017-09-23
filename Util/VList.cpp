@@ -19,7 +19,9 @@ VList::isLongList(unsigned _len)
 bool 
 VList::listNeedDelete(unsigned _len)
 {
+	//NOTICE: use this for application to save memory
 	return _len > VList::LENGTH_BORDER;
+	//NOTICE: use this for benchmark to improve performance
 	return _len > VList::CACHE_LIMIT;
 }
 
@@ -38,7 +40,6 @@ VList::VList(string& _filepath, string& _mode, unsigned long long _buffer_size)
 	vlist_cache_left = CACHE_CAPACITY;
 	cur_block_num = SET_BLOCK_NUM;		//initialize
 	this->filepath = _filepath;
-
 	if (_mode == string("build"))
 		valfp = fopen(_filepath.c_str(), "w+b");
 	else if (_mode == string("open"))
@@ -53,7 +54,11 @@ VList::VList(string& _filepath, string& _mode, unsigned long long _buffer_size)
 		cout<<string("error in VList: Open error ") + _filepath<<endl;
 		return;
 	}
-
+	for(int i = 0; i < 2000; ++i)
+		if (longlist[i]._str != NULL)
+		{
+			cout << "not init with null, " << i << endl;
+		}
 	this->max_buffer_size = _buffer_size;
 	this->freemem = this->max_buffer_size;
 	this->freelist = new BlockInfo;	//null-head
@@ -145,7 +150,7 @@ VList::AllocBlock()
 	unsigned t = p->num;
 	this->freelist->next = p->next;
 	delete p;
-
+	p = NULL;
 	return t;
 }
 
@@ -187,19 +192,35 @@ VList::WriteAlign(unsigned* _curnum)
 }
 
 bool 
-VList::readValue(unsigned _block_num, char*& _str, unsigned& _len)
+VList::readValue(unsigned _block_num, char*& _str, unsigned& _len, unsigned _key)
 {
 #ifdef DEBUG_VLIST
 	cout<<"to get value of block num: "<<_block_num<<endl;
 #endif
 	//if in cache, get directly(and this pointer shouldn't be clear in upper layer)
-	CACHE_ITERATOR it = this->vlist_cache.find(_block_num);
+/*	CACHE_ITERATOR it = this->vlist_cache.find(_block_num);
 	if(it != this->vlist_cache.end())
 	{
 		_str = it->second;
 		_len = strlen(_str);
 		return true;
-	}
+	}*/
+		unsigned node = _key % 2000, i;
+		for(i = node; longlist[i].key % 2000 <= node; ++i)
+		{
+			if (longlist[i].key == (int)_key || longlist[i].key == -1) break;
+			if (i > 1999) i %= 2000;
+		}
+		if (longlist[i].key == (int)_key) // value is in cache
+		{
+		//	cout << "access in cache" << endl;
+		//	accessOfCache++;		
+			_len = longlist[i]._len;
+			_str = new char[_len];
+			memcpy(_str, longlist[i]._str, _len);
+		//	cout << _len << endl;
+			return true;
+		}
 
 	//if not in cache, read from disk(add a random seek time), the pointer should be clear in upper layer
 	fseek(valfp, Address(_block_num), SEEK_SET);
@@ -211,7 +232,14 @@ VList::readValue(unsigned _block_num, char*& _str, unsigned& _len)
 	if(!this->listNeedDelete(_len))
 	{
 		//TODO: swap the oldest when overflow detected
-		//DEBUG: if simple stop adding here, then listNeedDelete will be invalid!
+		//DEBUG: if simple stop adding here, then listNeedDelete will be invalid(need delete but not, memory leak)!
+		//However, if using swap here, no error in sequential process, but in parallel process, error may come because the 
+		//inconsistency between the swap thread and the delete thread in KVstore.cpp
+		//
+		//Here we just withdraw the cache in VList, and delete each time when vlist is parsed, just control the listNeedDelete()
+		//(rely on the system cache to ensure performance in real applications)
+		//TODO: another choice may be using lock, before each vlist is parsed, the cache can not swap it out and delete it
+		//(In fact, if we use a long array as cache, and use LRU strategy with not so much requests, maybe lock is needless)
 		if(this->vlist_cache_left < _len)
 		{
 			cout<<"WARN in VList::readValue() -- cache overflow"<<endl;
@@ -346,6 +374,24 @@ VList::writeBstr(const char* _str, unsigned _len, unsigned* _curnum)
 	return true;
 }
 
+void
+VList::AddIntoCache(unsigned _key, char*& _str, unsigned _len)
+{
+//	cout << "vlist start" << endl;
+	unsigned node = _key % 2000;
+	while (longlist[node].key != -1)
+	{
+		++node;
+		if (node > 1999) node %= 2000;
+	}
+	longlist[node].key = _key;
+	longlist[node]._str = new char [_len];
+	memcpy(longlist[node]._str, _str, _len);
+	longlist[node]._len = _len;
+//	cout << "vlist finish" << endl;
+//	cout << "done vlist addintocache" << endl;
+}
+
 VList::~VList()
 {
 	//clear the cache
@@ -354,7 +400,8 @@ VList::~VList()
 		delete[] it->second;
 	}
 	this->vlist_cache.clear();
-
+	/*for(int i = 0; i < 2000; i++)
+			delete [] longlist[i]._str;*/
 	//write the info back
 	fseek(this->valfp, 0, SEEK_SET);
 	fwrite(&cur_block_num, sizeof(unsigned), 1, valfp);//write current blocks num

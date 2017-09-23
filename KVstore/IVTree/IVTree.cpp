@@ -137,6 +137,13 @@ IVTree::search(unsigned _key, char*& _str, unsigned& _len)
 	//_str = this->transfer[0].getStr();
 	//_len = this->transfer[0].getLen();
 
+	if (!VList::isLongList(_len))
+	{
+		char* debug = new char [_len];
+		memcpy(debug, _str, _len);
+		_str = debug;
+	}
+
 	this->TSM->request(request);
 	return true;
 }
@@ -181,7 +188,6 @@ IVTree::insert(unsigned _key, char* _str, unsigned _len)
 		this->TSM->updateHeap(ret, ret->getRank(), false);
 		this->root = father;
 	}
-
 	IVNode* p = this->root;
 	IVNode* q;
 	int i;
@@ -248,7 +254,6 @@ IVTree::insert(unsigned _key, char* _str, unsigned _len)
 		//_key->clear();
 		//_value->clear();
 	}
-
 	this->TSM->request(request);
 	return !ifexist;		//QUERY(which case:return false)
 }
@@ -617,17 +622,47 @@ IVTree::release(IVNode* _np) const
 	delete _np;
 }
 
+void
+IVTree::AddIntoCache(TYPE_PREDICATE_ID _id)
+{
+	char* _tmp = NULL;
+	unsigned _len;
+	this->search(_id, _tmp, _len);
+//	cout << "len is " << len << endl;
+	this->value_list->AddIntoCache(_id, _tmp, _len);
+	delete [] _tmp;
+}
+
+void
+IVTree::AddIntoCache(TYPE_ENTITY_LITERAL_ID _id)
+{
+	char* _tmp = NULL;
+	unsigned _len;
+	this->search(_id, _tmp, _len);
+//	cout << "len is " << len << endl;
+	this->value_list->AddIntoCache(_id, _tmp, _len);
+	delete [] _tmp;
+}
+
 IVTree::~IVTree()
 {
+	//cout << "IVTree" << endl;
+	//cout << "delete Vlist" << endl;
 	delete this->value_list;
-
-	delete this->stream;   //maybe NULL
+	value_list = NULL;
+	//cout << "delete stream" << endl;
+	delete this->stream;//maybe NULL
+	this->stream = NULL;
+	//cout << "delete TSM" << endl;
 	delete TSM;
+	TSM = NULL;
 #ifdef DEBUG_KVSTORE
-	printf("already empty the buffer, now to delete all nodes in tree!\n");
+	//printf("already empty the buffer, now to delete all nodes in tree!\n");
 #endif
 	//recursively delete each Node
+	//cout << "release" << endl;
 	release(root);
+	//cout << "~IVTree done" << endl;
 }
 
 void

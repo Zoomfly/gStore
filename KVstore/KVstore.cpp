@@ -59,25 +59,33 @@ KVstore::flush()
 void 
 KVstore::release() 
 {
+	//cout << "delete entity2id" << endl;
 	delete this->entity2id;
 	this->entity2id = NULL;
+	//cout << "delete id2eneity" << endl;
 	delete this->id2entity;
 	this->id2entity = NULL;
-
+	//cout << "delete literal2id" << endl;
 	delete this->literal2id;
 	this->literal2id = NULL;
+	//cout << "delete id2leteral" << endl;
 	delete this->id2literal;
 	this->id2literal = NULL;
 
+	//cout << "delete p2id" << endl;
 	delete this->predicate2id;
 	this->predicate2id = NULL;
+	//cout << "delte id2p" << endl;
 	delete this->id2predicate;
 	this->id2predicate = NULL;
 
+	//cout << "delete s2v" << endl;
 	delete this->subID2values;
 	this->subID2values = NULL;
+	//cout << "delete p2v" << endl;
 	delete this->preID2values;
 	this->preID2values = NULL;
+	//cout << "delete o2v" << endl;
 	delete this->objID2values;
 	this->objID2values = NULL;
 }
@@ -99,6 +107,32 @@ KVstore::open()
 	this->open_subID2values(KVstore::READ_WRITE_MODE);
 	this->open_objID2values(KVstore::READ_WRITE_MODE);
 	this->open_preID2values(KVstore::READ_WRITE_MODE);
+}
+
+string 
+KVstore::getStringByID(TYPE_ENTITY_LITERAL_ID _id)
+{
+	if(Util::is_entity_ele(_id))
+	{
+		return this->getEntityByID(_id);
+	}
+	else
+	{
+		return this->getLiteralByID(_id);
+	}
+}
+
+TYPE_ENTITY_LITERAL_ID
+KVstore::getIDByString(string _str)
+{
+	if(Util::isEntity(_str))
+	{
+		return this->getIDByEntity(_str);
+	}
+	else
+	{
+		return this->getIDByLiteral(_str);
+	}
 }
 
 unsigned
@@ -123,11 +157,8 @@ KVstore::getEntityInDegree(TYPE_ENTITY_LITERAL_ID _entity_id) const
 
 	//if this is a long list, then we should remove itself after copying
 	//otherwise, we should not free the list memory
-	if(VList::listNeedDelete(_len))
-	{
-		delete[] _tmp;
+	delete[] _tmp;
 		//_tmp = NULL;
-	}
 
 	return ret;
 }
@@ -148,11 +179,8 @@ KVstore::getEntityOutDegree(TYPE_ENTITY_LITERAL_ID _entity_id) const
 
 	//if this is a long list, then we should remove itself after copying
 	//otherwise, we should not free the list memory
-	if(VList::listNeedDelete(_len))
-	{
-		delete[] _tmp;
+	delete[] _tmp;
 		//_tmp = NULL;
-	}
 
 	return ret;
 }
@@ -173,12 +201,7 @@ KVstore::getLiteralDegree(TYPE_ENTITY_LITERAL_ID _literal_id) const
 
 	//if this is a long list, then we should remove itself after copying
 	//otherwise, we should not free the list memory
-	if(VList::listNeedDelete(_len))
-	{
-		delete[] _tmp;
-		//_tmp = NULL;
-	}
-
+	delete[] _tmp;
 	return ret;
 }
 
@@ -198,11 +221,8 @@ KVstore::getPredicateDegree(TYPE_PREDICATE_ID _predicate_id) const
 
 	//if this is a long list, then we should remove itself after copying
 	//otherwise, we should not free the list memory
-	if(VList::listNeedDelete(_len))
-	{
-		delete[] _tmp;
+	delete[] _tmp;
 		//_tmp = NULL;
-	}
 
 	return ret;
 }
@@ -238,12 +258,8 @@ KVstore::getSubjectPredicateDegree(TYPE_ENTITY_LITERAL_ID _subid, TYPE_PREDICATE
 
 	//if this is a long list, then we should remove itself after copying
 	//otherwise, we should not free the list memory
-	if(VList::listNeedDelete(_len))
-	{
-		delete[] _tmp;
+	delete[] _tmp;
 		//_tmp = NULL;
-	}
-
 	return ret;
 }
 
@@ -278,12 +294,8 @@ KVstore::getObjectPredicateDegree(TYPE_ENTITY_LITERAL_ID _objid, TYPE_PREDICATE_
 
 	//if this is a long list, then we should remove itself after copying
 	//otherwise, we should not free the list memory
-	if(VList::listNeedDelete(_len))
-	{
-		delete[] _tmp;
+	delete[] _tmp;
 		//_tmp = NULL;
-	}
-
 	return ret;
 }
 
@@ -555,11 +567,10 @@ KVstore::updateInsert_s2values(TYPE_ENTITY_LITERAL_ID _sub_id, TYPE_PREDICATE_ID
 				_values[j] = _tmp[i];
 			}
 		}
-
 		this->setValueByKey(this->subID2values, _sub_id, (char*)_values, sizeof(unsigned) * _values_len);
 		//delete[] _values;
 	}
-
+	delete []_tmp;
 	return true;
 }
 
@@ -651,7 +662,7 @@ KVstore::updateRemove_s2values(TYPE_ENTITY_LITERAL_ID _sub_id, TYPE_PREDICATE_ID
 		this->setValueByKey(this->subID2values, _sub_id, (char*)_values, sizeof(unsigned) * _values_len);
 		//delete[] _values;
 	}
-
+	delete []_tmp;
 	return true;
 }
 
@@ -779,7 +790,7 @@ KVstore::updateInsert_o2values(TYPE_ENTITY_LITERAL_ID _sub_id, TYPE_PREDICATE_ID
 		this->setValueByKey(this->objID2values, _obj_id, (char*)_values, sizeof(unsigned) * _values_len);
 		//delete[] _values;
 	}
-
+	delete []_tmp;
 	return true;
 }
 
@@ -859,7 +870,7 @@ KVstore::updateRemove_o2values(TYPE_ENTITY_LITERAL_ID _sub_id, TYPE_PREDICATE_ID
 		this->setValueByKey(this->objID2values, _obj_id, (char*)_values, sizeof(unsigned) * _values_len);
 		//delete[] _values;
 	}
-
+	delete []_tmp;
 	return true;
 }
 
@@ -932,7 +943,7 @@ KVstore::updateInsert_p2values(TYPE_ENTITY_LITERAL_ID _sub_id, TYPE_PREDICATE_ID
 		this->setValueByKey(this->preID2values, _pre_id, (char*)_values, sizeof(unsigned) * _values_len);
 		//delete[] _values;
 	}
-
+	delete []_tmp;
 	return true;
 }
 
@@ -972,7 +983,7 @@ KVstore::updateRemove_p2values(TYPE_ENTITY_LITERAL_ID _sub_id, TYPE_PREDICATE_ID
 		this->setValueByKey(this->preID2values, _pre_id, (char*)_values, sizeof(unsigned) * _values_len);
 		//delete[] _values;
 	}
-
+	delete []_tmp;
 	return true;
 }
 
@@ -1096,6 +1107,7 @@ KVstore::open_id2entity(int _mode)
 bool 
 KVstore::close_id2entity() 
 {
+
 	if (this->id2entity == NULL) 
 	{
 		return true;
@@ -1127,8 +1139,23 @@ KVstore::getEntityByID(TYPE_ENTITY_LITERAL_ID _id) const
 	}
 
 	//NOTICE: no need to add \0 at last if we indicate the length
+//	cout << "in getEntityByID: ";
+//	cout << _tmp << endl;
+//	unsigned length = _len + 1;
+//	char * debug = new char [length];
+//	memcpy(debug, _tmp, _len);
+//	debug[_len] = '\0';
+//	cout << "in getEntityByID (add): ";
+//	_tmp = debug;
+	//cout << _tmp << endl;
+	
 	string _ret = string(_tmp, _len);
-
+	delete []_tmp;
+//	cout << "string is: " << _ret << endl;
+//	string test1 = _ret;
+//	test1.append('\0');
+//	cout << "test1 is " << test1 << endl;
+	//cout << "test2 is " << test2 << endl;
 	return _ret;
 }
 
@@ -1261,7 +1288,7 @@ KVstore::getPredicateByID(TYPE_PREDICATE_ID _id) const
 		return "";
 	}
 	string _ret = string(_tmp, _len);
-
+	delete []_tmp;
 	return _ret;
 }
 
@@ -1396,7 +1423,7 @@ KVstore::getLiteralByID(TYPE_ENTITY_LITERAL_ID _id) const
 		return "";
 	}
 	string _ret = string(_tmp, _len);
-
+	delete []_tmp;
 	return _ret;
 }
 
@@ -1570,11 +1597,11 @@ KVstore::getpreIDlistBysubID(TYPE_ENTITY_LITERAL_ID _subid, unsigned*& _preidlis
 
 	//if this is a long list, then we should remove itself after copying
 	//otherwise, we should not free the list memory
-	if(VList::listNeedDelete(_len))
-	{
+//	if(VList::listNeedDelete(_len))
+//	{
 		delete[] _tmp;
 		//_tmp = NULL;
-	}
+//	}
 
 	return true;
 }
@@ -1608,11 +1635,11 @@ KVstore::getobjIDlistBysubID(TYPE_ENTITY_LITERAL_ID _subid, unsigned*& _objidlis
 
 	//if this is a long list, then we should remove itself after copying
 	//otherwise, we should not free the list memory
-	if(VList::listNeedDelete(_len))
-	{
+//	if(VList::listNeedDelete(_len))
+//	{
 		delete[] _tmp;
 		//_tmp = NULL;
-	}
+//	}
 
 	return true;
 }
@@ -1658,11 +1685,11 @@ KVstore::getobjIDlistBysubIDpreID(TYPE_ENTITY_LITERAL_ID _subid, TYPE_PREDICATE_
 
 	//if this is a long list, then we should remove itself after copying
 	//otherwise, we should not free the list memory
-	if(VList::listNeedDelete(_len))
-	{
+//	if(VList::listNeedDelete(_len))
+//	{
 		delete[] _tmp;
 		//_tmp = NULL;
-	}
+//	}
 
 	return true;
 }
@@ -1706,11 +1733,11 @@ KVstore::getpreIDobjIDlistBysubID(TYPE_ENTITY_LITERAL_ID _subid, unsigned*& _pre
 
 	//if this is a long list, then we should remove itself after copying
 	//otherwise, we should not free the list memory
-	if(VList::listNeedDelete(_len))
-	{
+//	if(VList::listNeedDelete(_len))
+//	{
 		delete[] _tmp;
 		//_tmp = NULL;
-	}
+//	}
 
 	return true;
 }
@@ -1815,12 +1842,13 @@ KVstore::build_objID2values(ID_TUPLE* _p_id_tuples, TYPE_TRIPLE_NUM _triples_num
 				for (k = 0; k < _sidlist_o.size(); j++, k++) {
 					_entrylist_o[j] = _sidlist_o[k];
 				}
+				
 				this->addValueByKey(this->objID2values, _obj_id, (char*)_entrylist_o, sizeof(unsigned) * j);
+				
 				//delete[] _entrylist_o;
 			}
 		}
 	}
-
 	this->close_objID2values();
 	cout << "Finished building objID2values" << endl;
 	return true;
@@ -1846,11 +1874,11 @@ KVstore::getpreIDlistByobjID(TYPE_ENTITY_LITERAL_ID _objid, unsigned*& _preidlis
 
 	//if this is a long list, then we should remove itself after copying
 	//otherwise, we should not free the list memory
-	if(VList::listNeedDelete(_len))
-	{
+//	if(VList::listNeedDelete(_len))
+//	{
 		delete[] _tmp;
 		//_tmp = NULL;
-	}
+//	}
 
 	return true;
 }
@@ -1878,11 +1906,11 @@ KVstore::getsubIDlistByobjID(TYPE_ENTITY_LITERAL_ID _objid, unsigned*& _subidlis
 
 	//if this is a long list, then we should remove itself after copying
 	//otherwise, we should not free the list memory
-	if(VList::listNeedDelete(_len))
-	{
+//	if(VList::listNeedDelete(_len))
+//	{
 		delete[] _tmp;
 		//_tmp = NULL;
-	}
+//	}
 
 	return true;
 }
@@ -1922,12 +1950,8 @@ KVstore::getsubIDlistByobjIDpreID(TYPE_ENTITY_LITERAL_ID _objid, TYPE_PREDICATE_
 
 	//if this is a long list, then we should remove itself after copying
 	//otherwise, we should not free the list memory
-	if(VList::listNeedDelete(_len))
-	{
-		delete[] _tmp;
+	delete[] _tmp;
 		//_tmp = NULL;
-	}
-
 	return true;
 }
 
@@ -1963,11 +1987,11 @@ KVstore::getpreIDsubIDlistByobjID(TYPE_ENTITY_LITERAL_ID _objid, unsigned*& _pre
 
 	//if this is a long list, then we should remove itself after copying
 	//otherwise, we should not free the list memory
-	if(VList::listNeedDelete(_len))
-	{
+//	if(VList::listNeedDelete(_len))
+//	{
 		delete[] _tmp;
 		//_tmp = NULL;
-	}
+//	}
 
 	return true;
 }
@@ -2083,11 +2107,11 @@ KVstore::getsubIDlistBypreID(TYPE_PREDICATE_ID _preid, unsigned*& _subidlist, un
 
 	//if this is a long list, then we should remove itself after copying
 	//otherwise, we should not free the list memory
-	if(VList::listNeedDelete(_len))
-	{
+//	if(VList::listNeedDelete(_len))
+//	{
 		delete[] _tmp;
 		//_tmp = NULL;
-	}
+//	}
 
 	return true;
 }
@@ -2114,11 +2138,11 @@ KVstore::getobjIDlistBypreID(TYPE_PREDICATE_ID _preid, unsigned*& _objidlist, un
 
 	//if this is a long list, then we should remove itself after copying
 	//otherwise, we should not free the list memory
-	if(VList::listNeedDelete(_len))
-	{
+//	if(VList::listNeedDelete(_len))
+//	{
 		delete[] _tmp;
 		//_tmp = NULL;
-	}
+//	}
 
 	return true;
 }
@@ -2154,14 +2178,14 @@ KVstore::getsubIDobjIDlistBypreID(TYPE_PREDICATE_ID _preid, unsigned*& _subid_ob
 
 	//if this is a long list, then we should remove itself after copying
 	//otherwise, we should not free the list memory
-	if(VList::listNeedDelete(_len))
-	{
+//	if(VList::listNeedDelete(_len))
+//	{
 #ifdef DEBUG_KVSTORE
 		cout<<"this is a vlist"<<endl;
 #endif
 		delete[] _tmp;
 		//_tmp = NULL;
-	}
+//	}
 
 	return true;
 }
@@ -2228,11 +2252,11 @@ KVstore::getpreIDlistBysubIDobjID(TYPE_ENTITY_LITERAL_ID _subid, TYPE_ENTITY_LIT
 
 	//if this is a long list, then we should remove itself after copying
 	//otherwise, we should not free the list memory
-	if(VList::listNeedDelete(_len))
-	{
+//	if(VList::listNeedDelete(_len))
+//	{
 		delete[] _tmp;
 		//_tmp = NULL;
-	}
+//	}
 
 	if (_list_len == 0) {
 		_preidlist = NULL;
@@ -2484,6 +2508,53 @@ KVstore::isEntity(TYPE_ENTITY_LITERAL_ID id)
 	return id < Util::LITERAL_FIRST_ID;
 }
 
+void
+KVstore::AddIntoPreCache(TYPE_PREDICATE_ID _pre_id)
+{
+	this->preID2values->AddIntoCache(_pre_id);
+}
+void 
+KVstore::AddIntoSubCache(TYPE_ENTITY_LITERAL_ID _entity_id)
+{
+	this->subID2values->AddIntoCache(_entity_id);
+}
+
+void 
+KVstore::AddIntoObjCache(TYPE_ENTITY_LITERAL_ID _entity_literal_id)
+{
+	this->objID2values->AddIntoCache(_entity_literal_id);
+}
+
+unsigned
+KVstore::getSubListSize(TYPE_ENTITY_LITERAL_ID _sub_id)
+{
+	unsigned* _tmp = NULL;
+	unsigned _ret;
+	this->getValueByKey(this->subID2values, _sub_id, (char*&) _tmp, _ret);
+	delete [] _tmp;
+	return _ret;
+}
+
+unsigned
+KVstore::getObjListSize(TYPE_ENTITY_LITERAL_ID _obj_id)
+{
+	unsigned* _tmp = NULL;
+	unsigned _ret;
+	this->getValueByKey(this->objID2values, _obj_id, (char*&) _tmp, _ret);
+	delete [] _tmp;
+	return _ret;
+}
+
+unsigned
+KVstore::getPreListSize(TYPE_PREDICATE_ID _pre_id)
+{
+	unsigned* _tmp = NULL;
+	unsigned _ret;
+	this->getValueByKey(this->preID2values, _pre_id, (char*&) _tmp, _ret);
+	delete [] _tmp;
+	return _ret;
+}
+
 //TODO+BETTER: adjust the buffer size according to current memory usage(global memory manager)
 //better to adjust these parameters according to memory usage and entity num
 //need a memory manager first
@@ -2513,7 +2584,7 @@ string KVstore::s_oID2values = "s_oID2values";
 string KVstore::s_pID2values = "s_pID2values";
 unsigned short KVstore::buffer_sID2values_build = 32;
 unsigned short KVstore::buffer_oID2values_build = 32;
-unsigned short KVstore::buffer_pID2values_build = 16;
+unsigned short KVstore::buffer_pID2values_build = 32;
 unsigned short KVstore::buffer_sID2values_query = 16;
 unsigned short KVstore::buffer_oID2values_query = 16;
 unsigned short KVstore::buffer_pID2values_query = 8;

@@ -1,3 +1,28 @@
+git commit: http://www.cnblogs.com/ctaodream/p/6066694.html
+<type>(<scope>) : <subject>
+<空行>
+<body>
+<空行>
+<footer>
+type:
++ fix :修复bug  
++ doc : 文档改变
++ style : 代码格式改变
++ refactor :某个已有功能重构
++ perf :性能优化
++ test :增加测试
++  build :改变了build工具 如 grunt换成了 npm
++ revert: 撤销上一次的 commit 
+scope:用来说明此次修改的影响范围 可以随便填写任何东西，commitizen也给出了几个 如：location 、browser、compile，不过我推荐使用
+all ：表示影响面大 ，如修改了网络框架  会对真个程序产生影响
+loation： 表示影响小，某个小小的功能
+module：表示会影响某个模块 如登录模块、首页模块 、用户管理模块等等
+subject: 用来简要描述本次改动，概述就好了
+body:具体的修改信息 应该尽量详细
+footer：放置写备注啥的，如果是 bug ，可以把bug id放入
+
+---
+
 # NOTICE
 
 一般在实践应用中不是单机，而是CS模式，因为API也是基于CS模式的。
@@ -99,22 +124,14 @@ http://blog.csdn.net/infoworld/article/details/8670951
 
 # TODO
 
-保证通过测试：shape和warp数据集，插删查操作都要测，bbug一系列特殊的查询也要跑
-要在单机支持到10亿triple，最坏情况下最多有20亿entity和20亿literal，目前的编号方式是不行的(int扩展为unsigned)
-最好在单机100G内存上支持起freebase(2.5B triples)这个规模的数据集，就像jena和virtuoso一样，慢不要紧
+Http通讯中answer的\n\t问题，可能是因为没有url encode的关系
+返回结果是否需要进行encode？如果是json是没有问题的
+但若一个string中本身就含有空格或\t，还能正确传输么？
+因为返回的结果不是URL，所以可以不处理
 
-type分支中query过程可能还有问题，需要修改Query/里面的类型，另外stringindex中也要修改，分界线已经是20亿且非法不再是-1
-remove signature.binary, 合并两个分支type value
-vstree在build和query时可以用不同大小的缓存，来加速build过程
-vstree建立太耗时，严重拖了build过程的后腿
 triple num改为unsigned long long，争取单机最大支持到100亿数据集，只要entity等数目不超过20亿。
-
-同时将ID的编码改为unsigned，无效标志-1改为最大值的宏, triple数目的类型也要改为unsigned
-注意pre的ID还可以为-2，或者对于pre仍然用int，或者改函数的返回值为long long (还有一些没有用-1而是>=0)
+triple数目的类型应该为long long
 ---
-将B+tree中叶节点的大的value分离出来，新建一套缓存，使用block机制，标记length为0表示未读取
-类型bstr的length问题也需要解决(新建Istr类型)
-如果把类型直接改成long long，空间开销一下子就上升了一倍
 解决方法：对于ID2string，仍然用char*和unsigned，但对于s2xx p2xx o2xx，应该用long long*和unsigned来表示，这样最高可支持到40亿triple
 注意：在B+树中是以long long*的方式存，但读出后应该全部换成unsigned*和unsigned搭配的方式(最长支持20亿个po对)
 UBSTR: 类型bstr的length问题也需要解决 如果把类型直接改成long long，空间开销一下子就上升了一倍
@@ -647,6 +664,8 @@ http://www.hprd.org/download/
 
 http://www.ruanyifeng.com/blog/2014/06/git_remote.html
 https://git-scm.com/book/zh/v1/%E8%B5%B7%E6%AD%A5-%E5%88%9D%E6%AC%A1%E8%BF%90%E8%A1%8C-Git-%E5%89%8D%E7%9A%84%E9%85%8D%E7%BD%AE
+
+To see all operations in Git, use git reflog
 
 #### how to commit a message
 

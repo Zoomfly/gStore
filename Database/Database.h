@@ -68,6 +68,12 @@ public:
 
 	//name of this DB
 	string getName();
+	//get infos
+	TYPE_TRIPLE_NUM getTripleNum();
+	TYPE_ENTITY_LITERAL_ID getEntityNum();
+	TYPE_ENTITY_LITERAL_ID getLiteralNum();
+	TYPE_ENTITY_LITERAL_ID getSubNum();
+	TYPE_PREDICATE_ID getPreNum();
 
 	//root Path of this DB + sixTuplesFile
 	string getSixTuplesFile();
@@ -88,6 +94,7 @@ private:
 	TYPE_TRIPLE_NUM triples_num;
 	TYPE_ENTITY_LITERAL_ID entity_num;
 	TYPE_ENTITY_LITERAL_ID sub_num;
+	//BETTER: add object num
 	TYPE_PREDICATE_ID pre_num;
 	TYPE_ENTITY_LITERAL_ID literal_num;
 
@@ -135,6 +142,36 @@ private:
 	//BETTER:add a predicate buffer for ?p query
 	//However, I think this is not necessary because ?p is rare and the p2xx tree is small enough
 
+	void check();
+	//used for multiple threads
+	void load_vstree(unsigned _vstree_size);
+	void load_entity2id(int _mode);
+	void load_id2entity(int _mode);
+	void load_literal2id(int _mode);
+	void load_id2literal(int _mode);
+	void load_predicate2id(int _mode);
+	void load_id2predicate(int _mode);
+	void load_sub2values(int _mode);
+	void load_obj2values(int _mode);
+	void load_pre2values(int _mode);
+	
+	// functions used to build cache
+	void load_cache();
+	void get_important_preID();
+	std::vector <TYPE_PREDICATE_ID> important_preID;
+	void load_important_sub2values();
+	void load_important_obj2values();
+	void load_candidate_pre2values();
+	void build_CacheOfPre2values();
+	void build_CacheOfSub2values();
+	void build_CacheOfObj2values();
+	void get_important_subID();
+	void get_important_objID();
+	void get_candidate_preID();
+	std::priority_queue <KEY_SIZE_VALUE> candidate_preID;
+	std::priority_queue <KEY_SIZE_VALUE> important_subID;
+	std::priority_queue <KEY_SIZE_VALUE> important_objID;
+	
 	//triple num per group for insert/delete
 	//can not be too high, otherwise the heap will over
 	static const int GROUP_SIZE = 1000;
